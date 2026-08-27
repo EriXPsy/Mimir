@@ -26,6 +26,7 @@ import type {
   ResearchGenerateBriefResult,
   ResearchAddJournalEntryResult,
   ResearchCloseIdeaResult,
+  ResearchAdoptIdeaResult,
   ResearchGetWorktreeResult,
   ResearchSetIdeaParentResult,
   ResearchSetMainlineResult,
@@ -126,6 +127,7 @@ function stubRemote(overrides: Partial<ResearchRemote>): ResearchRemote {
     getForaging: missing('getForaging'),
     setMainline: missing('setMainline'),
     setIdeaParent: missing('setIdeaParent'),
+    adoptIdea: missing('adoptIdea'),
     closeIdea: missing('closeIdea'),
     getImageGenConfig: missing('getImageGenConfig'),
     setImageGenConfig: missing('setImageGenConfig'),
@@ -2162,5 +2164,39 @@ describe('ResearchController foraging (S4)', () => {
     expect(failure).toBeNull()
     await new Promise(resolve => { setTimeout(resolve, 0) })
     expect(loads).toBe(2)
+  })
+})
+
+describe('ResearchController adoptIdea (worktree merge)', () => {
+  it('a merge refreshes the worktree but not the foraging baseline (not a departure)', async () => {
+    let worktreeLoads = 0
+    let foragingLoads = 0
+    const mergeEvent = {
+      id: 'ev-a1',
+      ts: '2026-08-27T08:00:00.000Z',
+      actor: { kind: 'user' as const, id: 'panel' },
+      action: 'knowledge.idea.adopted',
+      refs: { ideaId: 'i2' },
+      payload: {},
+    }
+    const controller = new ResearchController(stubRemote({
+      adoptIdea: () => Promise.resolve(carried<ResearchAdoptIdeaResult>({ ok: true, value: { event: mergeEvent } })),
+      getWorktree: () => {
+        worktreeLoads += 1
+        return Promise.resolve(carried<ResearchGetWorktreeResult>({ ok: true, value: { worktree: TREE } }))
+      },
+      getForaging: () => {
+        foragingLoads += 1
+        return Promise.resolve(carried<ResearchGetForagingResult>({ ok: true, value: { foraging: LAYER } }))
+      },
+    }))
+    controller.ensureWorktree()
+    controller.ensureForaging()
+    await new Promise(resolve => { setTimeout(resolve, 0) })
+    const failure = await controller.adoptIdea('i2')
+    expect(failure).toBeNull()
+    await new Promise(resolve => { setTimeout(resolve, 0) })
+    expect(worktreeLoads).toBe(2) // the merge re-derives the tree
+    expect(foragingLoads).toBe(1) // a merge is not a GUT departure
   })
 })

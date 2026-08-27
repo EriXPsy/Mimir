@@ -73,7 +73,7 @@ function LedgerRow({ event, t }: {
  */
 export function LedgerView({
   ledger, report, brief, worktree, foraging, selectedProjectId, loadLedger, generateReport, generateBrief, addJournal,
-  ensureWorktree, refreshWorktree, setMainline, setIdeaParent, closeIdea,
+  ensureWorktree, refreshWorktree, setMainline, setIdeaParent, adoptIdea, closeIdea,
   ensureForaging, refreshForaging, t,
 }: {
   readonly ledger: ResearchLedgerView
@@ -99,6 +99,7 @@ export function LedgerView({
   /** Declare (or clear) one derivation edge. */
   readonly setIdeaParent: (ideaId: string, parentIdeaId: string | null) => Promise<ResearchFailureView | null>
   /** Close one idea lane as a documented No. */
+  readonly adoptIdea: (ideaId: string) => Promise<ResearchFailureView | null>
   readonly closeIdea: (ideaId: string, reason: string) => Promise<ResearchFailureView | null>
   /** Load the foraging layer once, on the ledger view's first open. */
   readonly ensureForaging: () => void
@@ -216,6 +217,7 @@ export function LedgerView({
         refreshWorktree={refreshWorktree}
         setMainline={setMainline}
         setIdeaParent={setIdeaParent}
+        adoptIdea={adoptIdea}
         closeIdea={closeIdea}
         refreshLedger={refresh}
         t={t}

@@ -1007,6 +1007,9 @@ export type ResearchSetIdeaParentResult = ResearchResult<{ readonly event: Event
 /** `closeIdea` result: the stored `knowledge.idea.failed` event (a documented No). */
 export type ResearchCloseIdeaResult = ResearchResult<{ readonly event: EventRecord }>
 
+/** `adoptIdea` result: the stored `knowledge.idea.adopted` event (a declared merge). */
+export type ResearchAdoptIdeaResult = ResearchResult<{ readonly event: EventRecord }>
+
 /* ── Evidence engine (S3) wire payloads — E1, read-only until G1 ────────── */
 
 /** One action's learned row of the evidence profile. */

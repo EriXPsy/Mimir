@@ -321,6 +321,7 @@ function panelApply(ctx: ClientContext): void {
       refreshWorktree: () => { controller.refreshWorktree() },
       setMainline: lineId => controller.setMainline(lineId),
       setIdeaParent: (ideaId, parentIdeaId) => controller.setIdeaParent(ideaId, parentIdeaId),
+      adoptIdea: ideaId => controller.adoptIdea(ideaId),
       closeIdea: (ideaId, reason) => controller.closeIdea(ideaId, reason),
       ensureForaging: () => { controller.ensureForaging() },
       refreshForaging: () => { controller.refreshForaging() },

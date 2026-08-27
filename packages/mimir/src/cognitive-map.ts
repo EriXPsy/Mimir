@@ -12,7 +12,8 @@
  *  - drift (μ)     = time-decayed weighted sum of a line's evidence
  *  - dispersion (σ) = population standard deviation of the line's signed weights
  *  - boundaries    = the research's own decision institutions
- *                    (`knowledge.idea.failed`, `knowledge.claim.set` terminal)
+ *                    (`knowledge.idea.failed`, `knowledge.idea.adopted`,
+ *                    `knowledge.claim.set` terminal)
  *  - decision time = first-seen → boundary crossing, in days
  *
  * Lines are wiki ideas (explicit lines) and, for events that carry only a
@@ -68,7 +69,7 @@ const MS_PER_DAY = 86_400_000
 
 /**
  * The signed weight of one action on its line, over the REAL ledger
- * vocabulary (all 24 decision-grade actions). Outcomes that sign by payload
+ * vocabulary (all 25 decision-grade actions). Outcomes that sign by payload
  * (`compute.job.settled`, `knowledge.claim.set`) resolve in
  * {@link signedWeight}. Actions absent here weigh 0 (meta events like
  * `data.wiki.*` never move a line — and neither does the journal: `journal.*`
@@ -90,11 +91,13 @@ export const LINE_WEIGHTS: Readonly<Record<string, number>> = {
   'compute.server.deleted': -0.5,
   'experiments.deleted': -1.5,
   'knowledge.idea.failed': -2.5,
+  'knowledge.idea.adopted': 2.5, // the merge: the positive terminal, symmetric weight of the close
 }
 
 /** The boundary-crossing actions: the research's own decision institutions. */
 export const TERMINAL_ACTIONS: ReadonlySet<string> = new Set([
   'knowledge.idea.failed',
+  'knowledge.idea.adopted',
   'knowledge.claim.set',
 ])
 
@@ -349,6 +352,7 @@ function median(values: readonly number[]): number {
 /** Terminal only when the outcome actually decided (claim `set` to a terminal status). */
 function weightIsOutcomeTerminal(event: EventRecord): boolean {
   if (event.action === 'knowledge.idea.failed') return true
+  if (event.action === 'knowledge.idea.adopted') return true
   const status = typeof event.payload.status === 'string' ? event.payload.status : ''
   return status === 'supported' || status === 'invalidated'
 }

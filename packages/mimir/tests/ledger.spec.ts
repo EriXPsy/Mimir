@@ -827,6 +827,68 @@ describe('evidence engine remotes (S3 service wiring)', () => {
   })
 })
 
+describe('adopt remotes (worktree merge)', () => {
+  const MAIN: IdeaRecord = {
+    id: 'i9', title: 'Chunk-graph reranking', hypothesis: 'h',
+    status: 'active', createdAt: '2026-08-01T00:00:00.000Z',
+  }
+  const SIDE_BRANCH: IdeaRecord = {
+    id: 'i10', title: 'Late-interaction pooling', hypothesis: 'h',
+    status: 'active', createdAt: '2026-08-02T00:00:00.000Z',
+  }
+
+  it('adoptIdea declares the merge end to end: record, event, origin, lane', async () => {
+    const { domain, service } = await serviceHarness()
+    await domain.table('ideas').put(MAIN.id, MAIN)
+    await expect(service.adoptIdea({ ideaId: 'ghost' }))
+      .resolves.toMatchObject({ ok: false, error: { code: 'invalid-input', message: 'unknown ideaId: ghost' } })
+    const merged = await service.adoptIdea({ ideaId: MAIN.id })
+    expect(merged.ok).toBe(true)
+    if (!merged.ok) throw new Error('unreachable')
+    expect(merged.value.event).toMatchObject({
+      action: 'knowledge.idea.adopted',
+      actor: { kind: 'user', id: 'panel' }, // origin: the user's explicit, refusable action
+      refs: { ideaId: MAIN.id },
+    })
+    expect(domain.table('ideas').get(MAIN.id)).toMatchObject({ status: 'adopted' })
+    // A merge is written once; a documented No is not a merge.
+    await expect(service.adoptIdea({ ideaId: MAIN.id }))
+      .resolves.toMatchObject({ ok: false, error: { code: 'invalid-input', message: 'that line is already merged (an adoption is written once)' } })
+    await domain.table('ideas').put(SIDE_BRANCH.id, SIDE_BRANCH)
+    await service.closeIdea({ ideaId: SIDE_BRANCH.id, reason: 'no effect' })
+    await expect(service.adoptIdea({ ideaId: SIDE_BRANCH.id }))
+      .resolves.toMatchObject({ ok: false, error: { code: 'invalid-input', message: 'a documented No is a dead end, not a merge' } })
+    const tree = await service.getWorktree()
+    expect(tree.ok).toBe(true)
+    if (!tree.ok) throw new Error('unreachable')
+    expect(tree.value.worktree.counts.adopted).toBe(1)
+    const lane = tree.value.worktree.lanes.find(item => item.lineId === MAIN.id)
+    expect(lane?.status).toBe('adopted')
+  })
+
+  it('the merge folds +1 in the evidence engine (credit on prior actions)', async () => {
+    const { domain, service } = await serviceHarness()
+    await domain.table('ideas').put(MAIN.id, MAIN)
+    await appendEvent(domain, {
+      actor: WIKI_AGENT_ACTOR,
+      action: 'knowledge.idea.added',
+      refs: { ideaId: MAIN.id },
+      payload: { title: MAIN.title },
+      now: new Date(Date.now() - 5 * 86_400_000),
+    })
+    await service.adoptIdea({ ideaId: MAIN.id })
+    const profile = await service.getEvidenceProfile()
+    expect(profile.ok).toBe(true)
+    if (!profile.ok) throw new Error('unreachable')
+    expect(profile.value.profile.terminalsFolded).toBe(1)
+    // The +1 lands on the line's prior eligible action (share form).
+    const added = profile.value.profile.actions.find(item => item.action === 'knowledge.idea.added')
+    expect(added?.mass ?? 0).toBeGreaterThanOrEqual(1)
+    // The +1 outcome pulls the effective value toward +1 from its +2 prior.
+    expect(Math.abs((added?.effectiveValue ?? 1) - 1)).toBeLessThan(Math.abs((added?.prior ?? 1) - 1))
+  })
+})
+
 describe('foraging remotes (S4 service wiring)', () => {
   it('getForaging derives an empty layer over a fresh wiki', async () => {
     const { service } = await serviceHarness()

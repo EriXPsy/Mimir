@@ -5156,3 +5156,16 @@ li.dropIndicator {
   font-size: 8px;
   fill: var(--research-ink-2, #5b6470);
 }
+
+.worktreeMapFork {
+  fill: none;
+  stroke: var(--research-ink-3, #8a93a0);
+  stroke-width: 1.5;
+  stroke-linecap: round;
+  opacity: 0.55;
+}
+
+.worktreeMapOverflow {
+  font-size: 10px;
+  fill: var(--research-ink-3, #8a93a0);
+}

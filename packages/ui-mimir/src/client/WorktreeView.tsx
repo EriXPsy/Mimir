@@ -16,6 +16,7 @@ import type { ResearchWorktreeSlice, ResearchFailureView } from './controller.ts
 import type { ResearchKey } from './locales.ts'
 import type { ResearchT } from './view-common.ts'
 import { closeReasonState, isIdeaLane, WORKTREE_REASON_MAX_CHARS } from './worktree-view.ts'
+import { layoutWorktreeMap } from './worktree-map.ts'
 import css from './ResearchPanel.module.css'
 
 /** Whole days, rounded for display (the wire carries r3 precision). */
@@ -24,88 +25,77 @@ function days(value: number): string {
 }
 
 /**
- * The storyline strip (Ogawa & Ma's software-evolution storylines, v1.5
- * minimal): one horizontal lifeline per lane — declared → last touch (or
- * close) — with the mainline-declaration epochs as dashed verticals and
- * a solid now-line. Pure SVG over E0 timestamps; no zoom, no smoothing,
- * no stacking — the ③ v1.5 floor. Glyphs repeat the list's vocabulary
- * (● mainline, ⌥ open, ✓ adopted, ✗ dead end) so the strip never adds a
- * second visual grammar.
- * @param props - the worktree view model.
- * @returns the storyline SVG (or nothing before any lane exists).
+ * The branch-and-mainline map — the exploration treasure map proper: every
+ * lane a lifeline on its own track, every DECLARED derivation edge a soft
+ * fork curve from parent to child (leaf-vein gesture, git grammar), the
+ * mainline-declaration epochs as dashed verticals, and the now-line. Pure
+ * SVG over the pure layout in worktree-map.ts — no inference, no stacking,
+ * no zoom; glyphs repeat the list's vocabulary (● mainline, ⌥ open, ✓
+ * merged, ✗ dead end) so the map never adds a second visual grammar.
+ * @param props - the worktree view model and copy.
+ * @returns the map SVG (or nothing before any lane exists).
  */
-function StorylineStrip({ view }: { readonly view: ResearchWorktreeView }) {
-  const rows = view.lanes.slice(0, 24)
-  if (rows.length === 0) return null
-  const nowMs = Date.parse(view.derivedAt)
-  const times: number[] = [nowMs]
-  for (const lane of rows) {
-    const first = Date.parse(lane.firstSeen)
-    const end = lane.status === 'failed' && lane.closedAt !== null
-      ? Date.parse(lane.closedAt)
-      : Date.parse(lane.lastSeen)
-    if (Number.isFinite(first)) times.push(first)
-    if (Number.isFinite(end)) times.push(end)
-  }
-  for (const epoch of view.mainlineHistory) {
-    const at = Date.parse(epoch.declaredAt)
-    if (Number.isFinite(at)) times.push(at)
-  }
-  const tMin = Math.min(...times)
-  const tMax = Math.max(...times)
-  const span = tMax - tMin || 1
-  const W = 640
-  const ROW_H = 14
-  const PAD_X = 6
-  const height = rows.length * ROW_H + 6
-  const x = (ms: number): number => PAD_X + ((ms - tMin) / span) * (W - PAD_X * 2)
+const FORK_BOW = 9
+
+function BranchMapStrip({ view, t }: { readonly view: ResearchWorktreeView; readonly t: ResearchT }) {
+  const map = layoutWorktreeMap(view)
+  if (map.nodes.length === 0) return null
   return (
-    <div className={css.worktreeStory} role="img" aria-label="storyline">
-      <svg viewBox={`0 0 ${String(W)} ${String(height)}`} preserveAspectRatio="none">
-        {view.mainlineHistory.map(epoch => {
-          const at = Date.parse(epoch.declaredAt)
-          if (!Number.isFinite(at)) return null
-          return (
-            <line
-              key={`epoch-${epoch.lineId}-${epoch.declaredAt}`}
-              x1={x(at)} x2={x(at)} y1={2} y2={height - 2}
-              className={css.worktreeStoryEpoch}
-            >
-              <title>{`${epoch.label} · ${epoch.declaredAt.slice(0, 10)}`}</title>
-            </line>
-          )
-        })}
+    <div className={css.worktreeStory} role="img" aria-label={t('worktree.map')}>
+      <svg viewBox={`0 0 ${String(map.width)} ${String(map.height)}`} preserveAspectRatio="none">
+        {map.forks.map(fork => (
+          <path
+            key={`fork-${fork.parentLineId}-${fork.childLineId}`}
+            className={css.worktreeMapFork}
+            d={`M ${String(fork.x)} ${String(fork.y1)} Q ${String(fork.x + FORK_BOW)} ${String((fork.y1 + fork.y2) / 2)}, ${String(fork.x)} ${String(fork.y2)}`}
+          >
+            <title>{`${fork.childLineId} ← ${fork.parentLineId}`}</title>
+          </path>
+        ))}
+        {map.epochs.map(epoch => (
+          <line
+            key={`epoch-${epoch.label}-${epoch.at}`}
+            x1={epoch.x} x2={epoch.x} y1={2} y2={map.height - 2}
+            className={css.worktreeStoryEpoch}
+          >
+            <title>{`${epoch.label} · ${epoch.at.slice(0, 10)}`}</title>
+          </line>
+        ))}
         <line
-          x1={x(nowMs)} x2={x(nowMs)} y1={2} y2={height - 2}
+          x1={map.nowX} x2={map.nowX} y1={2} y2={map.height - 2}
           className={css.worktreeStoryNow}
         />
-        {rows.map((lane, index) => {
-          const first = Date.parse(lane.firstSeen)
-          const end = lane.status === 'failed' && lane.closedAt !== null
-            ? Date.parse(lane.closedAt)
-            : Date.parse(lane.lastSeen)
-          if (!Number.isFinite(first) || !Number.isFinite(end)) return null
-          const y = index * ROW_H + ROW_H / 2 + 2
-          const isMain = view.mainline?.lineId === lane.lineId
+        {map.nodes.map(node => {
+          const endIso = node.lane.status === 'failed' && node.lane.closedAt !== null
+            ? node.lane.closedAt
+            : node.lane.lastSeen
           return (
-            <g key={`lane-${lane.lineId}`}>
+            <g key={`lane-${node.lane.lineId}`}>
               <line
-                x1={x(first)} x2={x(end)} y1={y} y2={y}
+                x1={node.x1} x2={node.x2} y1={node.y} y2={node.y}
                 className={
-                  isMain ? css.worktreeStoryMain
-                    : lane.status === 'failed' ? css.worktreeStoryDead
-                      : lane.status === 'adopted' ? css.worktreeStoryMerged
+                  node.isMain ? css.worktreeStoryMain
+                    : node.lane.status === 'failed' ? css.worktreeStoryDead
+                      : node.lane.status === 'adopted' ? css.worktreeStoryMerged
                         : css.worktreeStoryOpen
                 }
               >
-                <title>{`${lane.label} · ${lane.firstSeen.slice(0, 10)} → ${new Date(end).toISOString().slice(0, 10)}`}</title>
+                <title>{`${node.lane.label} · ${node.lane.firstSeen.slice(0, 10)} → ${endIso.slice(0, 10)}`}</title>
               </line>
-              <text x={x(end) + 3} y={y + 3} className={css.worktreeStoryGlyph}>
-                {isMain ? '●' : lane.status === 'failed' ? '✗' : lane.status === 'adopted' ? '✓' : '⌥'}
+              <text x={node.x2 + 3} y={node.y + 3} className={css.worktreeStoryGlyph}>
+                {node.isMain ? '●' : node.lane.status === 'failed' ? '✗' : node.lane.status === 'adopted' ? '✓' : '⌥'}
               </text>
             </g>
           )
         })}
+        {map.hiddenCount > 0 && (
+          <text
+            x={map.width - 6} y={map.height - 2}
+            textAnchor="end" className={css.worktreeMapOverflow}
+          >
+            {t('worktree.map.overflow', { count: String(map.hiddenCount) })}
+          </text>
+        )}
       </svg>
     </div>
   )
@@ -113,7 +103,7 @@ function StorylineStrip({ view }: { readonly view: ResearchWorktreeView }) {
 
 /** One lane row: the glyph, the label, the E0 numbers, and the declared structure. */
 function LaneRow({
-  lane, isMain, ideaLanes, busy, onSetMainline, onSetParent, onClose, t,
+  lane, isMain, ideaLanes, busy, onSetMainline, onSetParent, onAdopt, onClose, t,
 }: {
   readonly lane: ResearchWorktreeLaneView
   readonly isMain: boolean
@@ -121,6 +111,7 @@ function LaneRow({
   readonly busy: boolean
   readonly onSetMainline: (lineId: string) => Promise<ResearchFailureView | null>
   readonly onSetParent: (ideaId: string, parentIdeaId: string | null) => Promise<ResearchFailureView | null>
+  readonly onAdopt: (ideaId: string) => Promise<ResearchFailureView | null>
   readonly onClose: (ideaId: string, reason: string) => Promise<ResearchFailureView | null>
   readonly t: ResearchT
 }) {
@@ -129,6 +120,7 @@ function LaneRow({
   const [error, setError] = useState<string | null>(null)
   const reasonState = closeReasonState(reason)
   const closeable = isIdeaLane(lane.lineId) && lane.status === 'open' && !isMain
+  const mergeable = isIdeaLane(lane.lineId) && lane.status === 'open'
 
   const onParentChange = async (value: string): Promise<void> => {
     if (busy) return
@@ -210,6 +202,16 @@ function LaneRow({
                 {t('worktree.mainline.set')}
               </button>
             )}
+            {mergeable && (
+              <button
+                type="button"
+                className={css.btn}
+                disabled={busy}
+                onClick={() => { void onAdopt(lane.lineId) }}
+              >
+                {t('worktree.adopt')}
+              </button>
+            )}
             {closeable && (
               <button
                 type="button"
@@ -275,12 +277,13 @@ function LaneRow({
  * @returns the worktree card (banner + grouped lanes + counts).
  */
 export function WorktreeView({
-  worktree, refreshWorktree, setMainline, setIdeaParent, closeIdea, refreshLedger, t,
+  worktree, refreshWorktree, setMainline, setIdeaParent, adoptIdea, closeIdea, refreshLedger, t,
 }: {
   readonly worktree: ResearchWorktreeSlice
   readonly refreshWorktree: () => void
   readonly setMainline: (lineId: string) => Promise<ResearchFailureView | null>
   readonly setIdeaParent: (ideaId: string, parentIdeaId: string | null) => Promise<ResearchFailureView | null>
+  readonly adoptIdea: (ideaId: string) => Promise<ResearchFailureView | null>
   readonly closeIdea: (ideaId: string, reason: string) => Promise<ResearchFailureView | null>
   /** Refresh the ledger timeline (a documented No lands as a ledger event too). */
   readonly refreshLedger: () => void
@@ -353,8 +356,8 @@ export function WorktreeView({
                 </>
               )}
           </div>
-          {/* The storyline strip: lifelines + epoch lines + the now-line. */}
-          <StorylineStrip view={view} />
+          {/* The branch map: lifelines + declared forks + epochs + now. */}
+          <BranchMapStrip view={view} t={t} />
 
           {lanes.length === 0 && <p className={css.hint}>{t('worktree.empty')}</p>}
           {groups.map(group => group.lanes.length === 0 ? null : (
@@ -371,6 +374,12 @@ export function WorktreeView({
                     onSetMainline={lineId => run(lineId, () => setMainline(lineId))}
                     onSetParent={(ideaId, parentIdeaId) =>
                       run(ideaId, () => setIdeaParent(ideaId, parentIdeaId))}
+                    onAdopt={ideaId =>
+                      run(ideaId, async () => {
+                        const failure = await adoptIdea(ideaId)
+                        if (failure === null) refreshLedger()
+                        return failure
+                      })}
                     onClose={(ideaId, reason) =>
                       run(ideaId, async () => {
                         const failure = await closeIdea(ideaId, reason)

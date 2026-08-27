@@ -38,6 +38,7 @@ import type {
   ResearchAddJournalEntryResult,
   ResearchBriefQuestion,
   ResearchCloseIdeaResult,
+  ResearchAdoptIdeaResult,
   ResearchGenerateBriefOptions,
   ResearchGenerateBriefResult,
   ResearchGetEvidenceProfileResult,
@@ -669,5 +670,57 @@ export async function closeIdeaRemote(
     return success({ event })
   } catch {
     return rejected({ code: 'operation-failed', message: 'the close could not be written' })
+  }
+}
+
+/**
+ * Adopt one idea line — declare the merge: the wiki record flips to
+ * `adopted` and one `knowledge.idea.adopted` event lands in the ledger
+ * under the PANEL actor (an explicit, user-refusable action; origin rule
+ * holds — whoever bears the uncertainty of the Yes owns it). Only an
+ * active line can be merged: a documented No is a dead end, not a merge,
+ * and a merge is written once. The merge is the positive terminal —
+ * symmetric weight of the close (+2.5 vs −2.5) and a +1 outcome for the
+ * evidence engine — but it is NOT a GUT departure: giving-up time is
+ * measured on documented closes only, so the foraging baseline does not
+ * refresh on a merge.
+ * @param deps - open wiki domain.
+ * @param request - the idea being merged.
+ * @returns the stored adopt event.
+ */
+export async function adoptIdeaRemote(
+  deps: LedgerDeps,
+  request: {
+    ideaId: string
+  },
+): Promise<ResearchAdoptIdeaResult> {
+  const { ideaId } = request
+  if (typeof ideaId !== 'string' || ideaId === '') {
+    return rejected({ code: 'invalid-input', message: 'ideaId must not be empty' })
+  }
+  const idea = deps.domain.table('ideas').get(ideaId)
+  if (idea === undefined) {
+    return rejected({ code: 'invalid-input', message: `unknown ideaId: ${ideaId}` })
+  }
+  if (idea.status === 'adopted') {
+    return rejected({ code: 'invalid-input', message: 'that line is already merged (an adoption is written once)' })
+  }
+  if (idea.status === 'failed') {
+    return rejected({ code: 'invalid-input', message: 'a documented No is a dead end, not a merge' })
+  }
+  try {
+    await deps.domain.table('ideas').update(ideaId, current => ({
+      ...current,
+      status: 'adopted' as const,
+    }))
+    const event = await appendEvent(deps.domain, {
+      actor: PANEL_ACTOR,
+      action: 'knowledge.idea.adopted',
+      refs: { ideaId },
+      payload: {},
+    })
+    return success({ event })
+  } catch {
+    return rejected({ code: 'operation-failed', message: 'the adoption could not be written' })
   }
 }

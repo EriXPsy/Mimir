@@ -161,7 +161,7 @@ export function ResearchPanel({
   ensureVenueTemplates, applyVenueTemplate, clearVenueTemplate, uploadTemplateFiles, requestVenueFormat,
   loadMeetings, generateMeetingDeck, deleteMeetingDeck, getImageGenConfig, saveImageGenConfig,
   loadLedger, generateReport, generateBrief, addJournal,
-  ensureWorktree, refreshWorktree, setMainline, setIdeaParent, closeIdea,
+  ensureWorktree, refreshWorktree, setMainline, setIdeaParent, adoptIdea, closeIdea,
   ensureForaging, refreshForaging,
   exportWiki, importWiki, dismissToast, pruneToasts,
   toggleTheme, toggleLocale, t,
@@ -630,6 +630,7 @@ export function ResearchPanel({
             refreshWorktree={refreshWorktree}
             setMainline={setMainline}
             setIdeaParent={setIdeaParent}
+            adoptIdea={adoptIdea}
             closeIdea={closeIdea}
             ensureForaging={ensureForaging}
             refreshForaging={refreshForaging}

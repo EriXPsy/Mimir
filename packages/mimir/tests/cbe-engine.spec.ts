@@ -119,6 +119,24 @@ describe('G0: synthetic ordering recovery (the SBC step)', () => {
     expect(effectiveValue(model, 'figures.deleted')).toBe(LINE_WEIGHTS['figures.deleted'])
   })
 
+  it('an adopted idea folds +1 — without it the profile would learn only from failures', () => {
+    const events = [
+      ev(day(0), 'knowledge.idea.added', { ideaId: 'i1' }),
+      ev(day(5), 'knowledge.idea.adopted', { ideaId: 'i1' }),
+    ]
+    const model = evidenceModelAt(events)
+    expect(terminalOutcome(events[1]!)).toBe(1)
+    expect(model.derivation.terminalsFolded).toBe(1)
+    const profile = evidenceProfileOf(model)
+    // The terminal credits the line's PRIOR eligible actions (share form);
+    // the terminal action itself carries no mass — check the added→adopted line.
+    const added = profile.actions.find(item => item.action === 'knowledge.idea.added')
+    expect(added?.mass ?? 0).toBeGreaterThanOrEqual(1)
+    // The +1 outcome pulls the effective value TOWARD +1 from its prior
+    // (the added prior is +2, so the move is downward — credit, not growth).
+    expect(Math.abs((added?.effectiveValue ?? 1) - 1)).toBeLessThan(Math.abs((added?.prior ?? 1) - 1))
+  })
+
   it('one terminal nudges toward the outcome, never leaps (κ conservatism)', () => {
     const model = evidenceModelAt([
       ev(day(1), 'experiments.saved', { ideaId: 'a' }),

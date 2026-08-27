@@ -71,11 +71,15 @@ function tsToMs(ts: string): number | null {
 
 /**
  * The outcome signal of one terminal event, sign-only: a supported claim
- * is +1, an invalidated claim or a failed idea is −1, anything else 0
- * (and 0 never folds — a pending re-set decides nothing).
+ * or an adopted idea (a declared merge) is +1, an invalidated claim or a
+ * failed idea is −1, anything else 0
+ * (and 0 never folds — a pending re-set decides nothing). Without the
+ * adopted +1 the profile would learn only from failures — systematic
+ * pessimism.
  */
 export function terminalOutcome(event: EventRecord): -1 | 0 | 1 {
   if (event.action === 'knowledge.idea.failed') return -1
+  if (event.action === 'knowledge.idea.adopted') return 1
   if (event.action === 'knowledge.claim.set') {
     const status = typeof event.payload.status === 'string' ? event.payload.status : ''
     if (status === 'supported') return 1

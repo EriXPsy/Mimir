@@ -34,6 +34,7 @@ import type {
   ResearchArxivSubscriptionsResult,
   ResearchAddJournalEntryResult,
   ResearchCloseIdeaResult,
+  ResearchAdoptIdeaResult,
   ResearchGetForagingResult,
   ResearchGetWorktreeResult,
   ResearchForagingView,
@@ -315,6 +316,7 @@ export interface ResearchRemote {
     ideaId: string
     parentIdeaId: string | null
   }) => Promise<RemoteResult<ResearchSetIdeaParentResult>>
+  adoptIdea: (request: { ideaId: string }) => Promise<RemoteResult<ResearchAdoptIdeaResult>>
   closeIdea: (request: {
     ideaId: string
     reason: string
@@ -1220,6 +1222,25 @@ export class ResearchController implements HostObservable<ResearchView> {
       this.requeueWorktree()
       // A documented close is a new GUT sample — the baseline refreshes too.
       this.requeueForaging()
+      return null
+    } catch (error) {
+      return transportFailure(error)
+    }
+  }
+
+  /**
+   * Declare the merge: one idea line adopted (✓). A merge refreshes the
+   * worktree; it is NOT a GUT departure, so the foraging baseline stays
+   * put (giving-up time is measured on documented closes only).
+   */
+  async adoptIdea(ideaId: string): Promise<ResearchFailureView | null> {
+    try {
+      const carried = await this.remote.adoptIdea({ ideaId })
+      if (!carried.ok) return failureOf(carried.error.code, carried.error.message)
+      const result = carried.value
+      if (!result.ok) return businessFailure(result.error)
+      this.notify('success', 'worktree.adopted')
+      this.requeueWorktree()
       return null
     } catch (error) {
       return transportFailure(error)

@@ -23,6 +23,7 @@ import type {
   ResearchAddJournalEntryResult,
   ResearchArxivSubscriptionsResult,
   ResearchCloseIdeaResult,
+  ResearchAdoptIdeaResult,
   ResearchGetEvidenceProfileResult,
   ResearchGetForagingResult,
   ResearchGetWorktreeResult,
@@ -663,6 +664,13 @@ export class ResearchService extends TypertRemoteService {
     parentIdeaId: string | null
   }): Promise<ResearchSetIdeaParentResult> {
     return ledger.setIdeaParentRemote(this.deps, request)
+  }
+
+  @Remote('adoptIdea')
+  adoptIdea(request: {
+    ideaId: string
+  }): Promise<ResearchAdoptIdeaResult> {
+    return ledger.adoptIdeaRemote(this.deps, request)
   }
 
   @Remote('closeIdea')

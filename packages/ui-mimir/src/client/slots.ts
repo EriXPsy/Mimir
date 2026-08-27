@@ -537,6 +537,12 @@ export interface ResearchPanelInjected {
    */
   setIdeaParent: (ideaId: string, parentIdeaId: string | null) => Promise<ResearchFailureView | null>
   /**
+   * Declare the merge — adopt one idea line (✓); only an active line can
+   * be merged, and a merge is written once.
+   * @returns null on success, the settled failure view otherwise.
+   */
+  adoptIdea: (ideaId: string) => Promise<ResearchFailureView | null>
+  /**
    * Close one idea lane as a dead end — a documented No with its one-line
    * lesson; dead ends are never pruned from the tree.
    * @returns null on success, the settled failure view otherwise.
