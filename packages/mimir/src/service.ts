@@ -22,6 +22,10 @@ import type {
   ResearchArtifactResult,
   ResearchAddJournalEntryResult,
   ResearchArxivSubscriptionsResult,
+  ResearchCloseIdeaResult,
+  ResearchGetWorktreeResult,
+  ResearchSetIdeaParentResult,
+  ResearchSetMainlineResult,
   ResearchBibliographyResult,
   ResearchCheckArxivSubscriptionsResult,
   ResearchCheckServerResult,
@@ -634,6 +638,36 @@ export class ResearchService extends TypertRemoteService {
     arousal?: number | undefined
   }): Promise<ResearchAddJournalEntryResult> {
     return ledger.addJournalEntryRemote(this.deps, request)
+  }
+
+  // worktree domain (S2): the research process as a git-like working tree
+  @Remote('getWorktree')
+  getWorktree(): Promise<ResearchGetWorktreeResult> {
+    return ledger.getWorktreeRemote(this.deps)
+  }
+
+  @Remote('setMainline')
+  setMainline(request: {
+    ideaId?: string | undefined
+    projectId?: string | undefined
+  }): Promise<ResearchSetMainlineResult> {
+    return ledger.setMainlineRemote(this.deps, request)
+  }
+
+  @Remote('setIdeaParent')
+  setIdeaParent(request: {
+    ideaId: string
+    parentIdeaId: string | null
+  }): Promise<ResearchSetIdeaParentResult> {
+    return ledger.setIdeaParentRemote(this.deps, request)
+  }
+
+  @Remote('closeIdea')
+  closeIdea(request: {
+    ideaId: string
+    reason: string
+  }): Promise<ResearchCloseIdeaResult> {
+    return ledger.closeIdeaRemote(this.deps, request)
   }
 }
 

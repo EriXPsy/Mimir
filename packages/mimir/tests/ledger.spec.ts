@@ -32,7 +32,7 @@ import {
   SERVICE_ACTOR,
   WIKI_AGENT_ACTOR,
 } from '../src/ledger.ts'
-import type { ProjectRecord, ClaimRecord, ExperimentRecord, EventRecord } from '../src/types.ts'
+import type { ProjectRecord, ClaimRecord, ExperimentRecord, EventRecord, IdeaRecord } from '../src/types.ts'
 
 /** Boot one open research-wiki domain over a throwaway memory medium. */
 async function domainHarness(): Promise<ResearchWikiDomain> {
@@ -565,6 +565,161 @@ describe('cognitive beidou remotes (CBE service wiring)', () => {
     expect(pending?.lineId).toBe('c9')
     expect(pending?.label.endsWith('…')).toBe(true)
     expect(pending?.label.length).toBeLessThanOrEqual(48)
+  })
+})
+
+describe('worktree remotes (S2 service wiring)', () => {
+  const ACTIVE: IdeaRecord = {
+    id: 'i1',
+    title: 'Bayes overflow',
+    hypothesis: 'h',
+    status: 'active',
+    createdAt: '2026-08-01T00:00:00.000Z',
+  }
+  const SIDE: IdeaRecord = {
+    id: 'i2',
+    title: 'Side branch',
+    hypothesis: 'h',
+    status: 'active',
+    createdAt: '2026-08-02T00:00:00.000Z',
+  }
+
+  it('getWorktree derives an empty tree over a fresh wiki', async () => {
+    const { service } = await serviceHarness()
+    const outcome = await service.getWorktree()
+    expect(outcome.ok).toBe(true)
+    if (!outcome.ok) throw new Error('unreachable')
+    expect(outcome.value.worktree.lanes).toEqual([])
+    expect(outcome.value.worktree.mainline).toBeNull()
+    expect(outcome.value.worktree.counts).toEqual({ open: 0, failed: 0, adopted: 0 })
+  })
+
+  it('setMainline moves the ref, and getWorktree reads it back label-resolved', async () => {
+    const { domain, service } = await serviceHarness()
+    await domain.table('projects').put(PROJECT.id, PROJECT)
+    await domain.table('ideas').put(ACTIVE.id, ACTIVE)
+    const declared = await service.setMainline({ ideaId: 'i1' })
+    expect(declared.ok).toBe(true)
+    if (!declared.ok) throw new Error('unreachable')
+    expect(declared.value.event).toMatchObject({
+      action: 'cbe.mainline.set',
+      actor: { kind: 'user', id: 'panel' },
+      refs: { ideaId: 'i1' },
+    })
+    const tree = await service.getWorktree()
+    expect(tree.ok).toBe(true)
+    if (!tree.ok) throw new Error('unreachable')
+    expect(tree.value.worktree.mainline).toEqual({ lineId: 'i1', label: 'Bayes overflow', declaredAt: declared.value.event.ts })
+    expect(tree.value.worktree.mainlineHistory).toHaveLength(1)
+  })
+
+  it('setMainline validates arity, unknown ids, and live-line status', async () => {
+    const { domain, service } = await serviceHarness()
+    await domain.table('projects').put(PROJECT.id, PROJECT)
+    await domain.table('ideas').put(ACTIVE.id, ACTIVE)
+    await domain.table('ideas').put('i3', { ...ACTIVE, id: 'i3', status: 'failed', failureReason: 'no effect' })
+    await expect(service.setMainline({}))
+      .resolves.toMatchObject({ ok: false, error: { code: 'invalid-input', message: 'setMainline takes exactly one of ideaId or projectId' } })
+    await expect(service.setMainline({ ideaId: 'i1', projectId: 'p1' }))
+      .resolves.toMatchObject({ ok: false, error: { code: 'invalid-input' } })
+    await expect(service.setMainline({ ideaId: 'ghost' }))
+      .resolves.toMatchObject({ ok: false, error: { code: 'invalid-input', message: 'unknown ideaId: ghost' } })
+    await expect(service.setMainline({ projectId: 'ghost' }))
+      .resolves.toMatchObject({ ok: false, error: { code: 'project-not-found' } })
+    await expect(service.setMainline({ ideaId: 'i3' }))
+      .resolves.toMatchObject({ ok: false, error: { code: 'invalid-input', message: 'only an active line can be the mainline (this one is failed)' } })
+    const projectMainline = await service.setMainline({ projectId: PROJECT.id })
+    expect(projectMainline.ok).toBe(true)
+  })
+
+  it('setIdeaParent declares edges, rejects cycles, and clears with null', async () => {
+    const { domain, service } = await serviceHarness()
+    await domain.table('ideas').put(ACTIVE.id, ACTIVE)
+    await domain.table('ideas').put(SIDE.id, SIDE)
+    await expect(service.setIdeaParent({ ideaId: 'ghost', parentIdeaId: 'i1' }))
+      .resolves.toMatchObject({ ok: false, error: { code: 'invalid-input', message: 'unknown ideaId: ghost' } })
+    await expect(service.setIdeaParent({ ideaId: 'i2', parentIdeaId: 'ghost' }))
+      .resolves.toMatchObject({ ok: false, error: { code: 'invalid-input', message: 'unknown parentIdeaId: ghost' } })
+    await expect(service.setIdeaParent({ ideaId: 'i2', parentIdeaId: 'i2' }))
+      .resolves.toMatchObject({ ok: false, error: { code: 'invalid-input', message: 'a line cannot derive from itself' } })
+    const declared = await service.setIdeaParent({ ideaId: 'i2', parentIdeaId: 'i1' })
+    expect(declared.ok).toBe(true)
+    if (!declared.ok) throw new Error('unreachable')
+    expect(declared.value.event).toMatchObject({
+      action: 'cbe.idea.parent.set',
+      refs: { ideaId: 'i2' },
+      payload: { parentIdeaId: 'i1' },
+    })
+    // i1 → i2 would close a loop through the just-declared i2 → i1 edge.
+    await expect(service.setIdeaParent({ ideaId: 'i1', parentIdeaId: 'i2' }))
+      .resolves.toMatchObject({ ok: false, error: { code: 'invalid-input', message: 'that derivation would create a cycle' } })
+    const tree = await service.getWorktree()
+    expect(tree.ok).toBe(true)
+    if (!tree.ok) throw new Error('unreachable')
+    const lane = tree.value.worktree.lanes.find(item => item.lineId === 'i2')
+    expect(lane?.parentLineId).toBe('i1')
+    expect(lane?.parentLabel).toBe('Bayes overflow')
+    const cleared = await service.setIdeaParent({ ideaId: 'i2', parentIdeaId: null })
+    expect(cleared.ok).toBe(true)
+    const after = await service.getWorktree()
+    expect(after.ok).toBe(true)
+    if (!after.ok) throw new Error('unreachable')
+    expect(after.value.worktree.lanes.find(item => item.lineId === 'i2')?.parentLineId).toBeNull()
+  })
+
+  it('closeIdea writes the documented No end to end: record, event, origin, GUT', async () => {
+    const now = Date.parse('2026-08-27T00:00:00.000Z')
+    const { domain, service } = await serviceHarness()
+    await domain.table('ideas').put(SIDE.id, SIDE)
+    await appendEvent(domain, {
+      actor: WIKI_AGENT_ACTOR,
+      action: 'knowledge.idea.added',
+      refs: { ideaId: SIDE.id },
+      payload: { title: SIDE.title },
+      now: new Date(now - 10 * 86_400_000),
+    })
+    await appendEvent(domain, {
+      actor: WIKI_AGENT_ACTOR,
+      action: 'experiments.saved',
+      refs: { ideaId: SIDE.id },
+      payload: { name: 'run1', created: true },
+      now: new Date(now - 6 * 86_400_000),
+    })
+    await expect(service.closeIdea({ ideaId: 'i2', reason: '   ' }))
+      .resolves.toMatchObject({ ok: false, error: { code: 'invalid-input', message: 'close reason must not be empty' } })
+    await expect(service.closeIdea({ ideaId: 'i2', reason: 'x'.repeat(49) }))
+      .resolves.toMatchObject({ ok: false, error: { code: 'invalid-input', message: 'close reason is capped at 48 characters' } })
+    await expect(service.closeIdea({ ideaId: 'ghost', reason: 'no effect' }))
+      .resolves.toMatchObject({ ok: false, error: { code: 'invalid-input', message: 'unknown ideaId: ghost' } })
+    const closed = await service.closeIdea({ ideaId: 'i2', reason: 'no effect under load' })
+    expect(closed.ok).toBe(true)
+    if (!closed.ok) throw new Error('unreachable')
+    expect(closed.value.event).toMatchObject({
+      action: 'knowledge.idea.failed',
+      actor: { kind: 'user', id: 'panel' }, // origin: the user's explicit, refusable action
+      refs: { ideaId: 'i2' },
+      payload: { reason: 'no effect under load' },
+    })
+    expect(domain.table('ideas').get('i2')).toMatchObject({ status: 'failed', failureReason: 'no effect under load' })
+    // Re-closing is rejected: a documented No is written once.
+    await expect(service.closeIdea({ ideaId: 'i2', reason: 'again' }))
+      .resolves.toMatchObject({ ok: false, error: { code: 'invalid-input', message: 'that line is already closed (a documented No)' } })
+    const tree = await service.getWorktree()
+    expect(tree.ok).toBe(true)
+    if (!tree.ok) throw new Error('unreachable')
+    const lane = tree.value.worktree.lanes.find(item => item.lineId === 'i2')
+    expect(lane?.status).toBe('failed')
+    expect(lane?.closeReason).toBe('no effect under load')
+    // GUT: last touch 6 days before the close (the close rides the real clock).
+    expect(lane?.gutDays).toBeGreaterThan(6)
+    expect(lane?.gutDays).toBeLessThan(7)
+  })
+
+  it('closeIdea refuses an adopted line: a merge is not a dead end', async () => {
+    const { domain, service } = await serviceHarness()
+    await domain.table('ideas').put('i4', { ...ACTIVE, id: 'i4', status: 'adopted' })
+    await expect(service.closeIdea({ ideaId: 'i4', reason: 'wrong kind of ending' }))
+      .resolves.toMatchObject({ ok: false, error: { code: 'invalid-input', message: 'an adopted line is a merge, not a dead end' } })
   })
 })
 

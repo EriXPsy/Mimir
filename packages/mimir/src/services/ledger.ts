@@ -18,16 +18,33 @@ import {
 } from '../ledger.ts'
 import { deriveBrief, JOURNAL_ACTION, renderBriefMarkdown } from '../cognitive-map.ts'
 import type { CbeBriefWindow, CbeWikiSnapshot } from '../cognitive-map.ts'
+import {
+  deriveWorktree,
+  ideaParentEdges,
+  IDEA_CLOSE_REASON_MAX_CHARS,
+  IDEA_PARENT_ACTION,
+  MAINLINE_ACTION,
+} from '../worktree.ts'
+import type {
+  CbeMainlineDeclaration,
+  CbeWorktreeLane,
+} from '../worktree.ts'
 import type {
   EventRefs,
   LedgerActorKind,
   ResearchAddJournalEntryResult,
   ResearchBriefQuestion,
+  ResearchCloseIdeaResult,
   ResearchGenerateBriefOptions,
   ResearchGenerateBriefResult,
+  ResearchGetWorktreeResult,
   ResearchListEventsResult,
   ResearchProgressReportOptions,
   ResearchProgressReportResult,
+  ResearchSetIdeaParentResult,
+  ResearchSetMainlineResult,
+  ResearchWorktreeMainlineView,
+  ResearchWorktreeView,
 } from '../types.ts'
 import { rejected, success } from './common.ts'
 
@@ -292,5 +309,255 @@ export async function addJournalEntryRemote(
       code: 'invalid-input',
       message: error instanceof RangeError ? error.message : 'journal entry is invalid',
     })
+  }
+}
+
+/* ------------------------------------------------------------------------ *
+ * Worktree (S2): the research process as a git-like working tree. The view
+ * is a pure L0 projection (E0 by construction); the three writes are the
+ * user's own structural declarations — the mainline ref move, the declared
+ * derivation edge, and the documented No — every one an explicit,
+ * user-refusable action, so origin attribution is 'user' by construction.
+ * ------------------------------------------------------------------------ */
+
+/**
+ * The label map every worktree view resolves against: idea ids and
+ * `project:<id>` lanes become their wiki titles; unresolvable ids pass
+ * through verbatim (the view still names a line, never a blank).
+ */
+function worktreeLabels(wiki: CbeWikiSnapshot): Map<string, string> {
+  return new Map<string, string>([
+    ...wiki.ideas.map(idea => [idea.id, idea.title] as const),
+    ...wiki.projects.map(project => [`project:${project.id}`, project.title] as const),
+  ])
+}
+
+/** One declaration joined with its label for the view. */
+function declaredView(
+  declaration: CbeMainlineDeclaration,
+  labels: ReadonlyMap<string, string>,
+): ResearchWorktreeMainlineView {
+  return Object.freeze({
+    lineId: declaration.lineId,
+    label: labels.get(declaration.lineId) ?? declaration.lineId,
+    declaredAt: declaration.declaredAt,
+  })
+}
+
+/**
+ * Read the whole derived worktree: every lane (idea lines plus project
+ * lines, including wiki-only ideas with no events yet) with its status,
+ * declared parent, activity dates, and documented-No numbers; the mainline
+ * ref and its full reflog; and the lane counts. A pure query over the full
+ * ledger plus current wiki state — it writes nothing, infers no genealogy,
+ * and needs no gate (the view is the data wearing tree semantics).
+ * @param deps - open wiki domain.
+ * @returns the derived, label-resolved worktree.
+ */
+export async function getWorktreeRemote(deps: LedgerDeps): Promise<ResearchGetWorktreeResult> {
+  try {
+    const events = await listEvents(deps.domain, { limit: LIST_EVENTS_MAX_LIMIT })
+    const wiki: CbeWikiSnapshot = {
+      ideas: [...deps.domain.table('ideas').entries()].map(([, record]) => record),
+      claims: [...deps.domain.table('claims').entries()].map(([, record]) => record),
+      projects: [...deps.domain.table('projects').entries()].map(([, record]) => record),
+    }
+    const tree = deriveWorktree(events, wiki, Date.now())
+    const labels = worktreeLabels(wiki)
+    const lanes = tree.lanes.map((lane: CbeWorktreeLane) => Object.freeze({
+      ...lane,
+      parentLabel: lane.parentLineId === null
+        ? null
+        : labels.get(lane.parentLineId) ?? lane.parentLineId,
+    }))
+    const view: ResearchWorktreeView = Object.freeze({
+      derivedAt: tree.asOf,
+      lanes: Object.freeze(lanes),
+      mainline: tree.mainline === null ? null : declaredView(tree.mainline, labels),
+      mainlineHistory: Object.freeze(tree.mainlineHistory.map(item => declaredView(item, labels))),
+      counts: Object.freeze({ ...tree.counts }),
+    })
+    return success({ worktree: view })
+  } catch {
+    return rejected({ code: 'operation-failed', message: 'the worktree could not be derived' })
+  }
+}
+
+/**
+ * Move the mainline ref (one `cbe.mainline.set` event): the user's explicit
+ * declaration of the current mainline — the system never moves it and never
+ * ranks lines into it. Exactly one of `ideaId`/`projectId` (unknown ids and
+ * non-active ideas are `invalid-input` — the mainline is a live direction).
+ * The reflog is the event history itself: 大改变 stays on the record.
+ * @param deps - open wiki domain.
+ * @param request - the line to declare (exactly one ref kind).
+ * @returns the stored declaration event.
+ */
+export async function setMainlineRemote(
+  deps: LedgerDeps,
+  request: {
+    ideaId?: string | undefined
+    projectId?: string | undefined
+  },
+): Promise<ResearchSetMainlineResult> {
+  const { ideaId, projectId } = request
+  if ((ideaId === undefined) === (projectId === undefined)) {
+    return rejected({
+      code: 'invalid-input',
+      message: 'setMainline takes exactly one of ideaId or projectId',
+    })
+  }
+  if (ideaId !== undefined) {
+    const idea = deps.domain.table('ideas').get(ideaId)
+    if (idea === undefined) {
+      return rejected({ code: 'invalid-input', message: `unknown ideaId: ${ideaId}` })
+    }
+    if (idea.status !== 'active') {
+      return rejected({
+        code: 'invalid-input',
+        message: `only an active line can be the mainline (this one is ${idea.status})`,
+      })
+    }
+  } else if (projectId !== undefined && deps.domain.table('projects').get(projectId) === undefined) {
+    return rejected({ code: 'project-not-found', projectId })
+  }
+  try {
+    const event = await appendEvent(deps.domain, {
+      actor: PANEL_ACTOR,
+      action: MAINLINE_ACTION,
+      refs: ideaId !== undefined ? { ideaId } : { projectId: projectId as string },
+    })
+    return success({ event })
+  } catch {
+    return rejected({ code: 'operation-failed', message: 'the mainline declaration could not be written' })
+  }
+}
+
+/**
+ * Declare (or clear) one derivation edge — a branch point, in the
+ * surveyor's own words: `refs.ideaId` carries the child, the payload the
+ * parent. `parentIdeaId: null` clears the edge (an append, never a rewrite
+ * — the history of re-declarations stays on the record). Edges are NEVER
+ * inferred; the cycle guard walks the existing declared edges so the
+ * genealogy stays a forest.
+ * @param deps - open wiki domain.
+ * @param request - the child idea plus its parent (or null to clear).
+ * @returns the stored edge event.
+ */
+export async function setIdeaParentRemote(
+  deps: LedgerDeps,
+  request: {
+    ideaId: string
+    parentIdeaId: string | null
+  },
+): Promise<ResearchSetIdeaParentResult> {
+  const { ideaId, parentIdeaId } = request
+  if (typeof ideaId !== 'string' || ideaId === '') {
+    return rejected({ code: 'invalid-input', message: 'ideaId must be a non-empty string' })
+  }
+  if (deps.domain.table('ideas').get(ideaId) === undefined) {
+    return rejected({ code: 'invalid-input', message: `unknown ideaId: ${ideaId}` })
+  }
+  if (parentIdeaId === null) {
+    try {
+      const event = await appendEvent(deps.domain, {
+        actor: PANEL_ACTOR,
+        action: IDEA_PARENT_ACTION,
+        refs: { ideaId },
+        payload: { parentIdeaId: null },
+      })
+      return success({ event })
+    } catch {
+      return rejected({ code: 'operation-failed', message: 'the derivation edge could not be written' })
+    }
+  }
+  if (deps.domain.table('ideas').get(parentIdeaId) === undefined) {
+    return rejected({ code: 'invalid-input', message: `unknown parentIdeaId: ${parentIdeaId}` })
+  }
+  if (parentIdeaId === ideaId) {
+    return rejected({ code: 'invalid-input', message: 'a line cannot derive from itself' })
+  }
+  // The cycle guard: walk the DECLARED edges up from the proposed parent;
+  // meeting the child again would close a loop the map must never carry.
+  const edges = ideaParentEdges(await listEvents(deps.domain, {
+    actionPrefix: 'cbe.idea.',
+    limit: LIST_EVENTS_MAX_LIMIT,
+  }))
+  let cursor: string | undefined = edges.get(parentIdeaId)
+  for (let hops = 0; cursor !== undefined && hops < 1000; hops += 1) {
+    if (cursor === ideaId) {
+      return rejected({ code: 'invalid-input', message: 'that derivation would create a cycle' })
+    }
+    cursor = edges.get(cursor)
+  }
+  try {
+    const event = await appendEvent(deps.domain, {
+      actor: PANEL_ACTOR,
+      action: IDEA_PARENT_ACTION,
+      refs: { ideaId },
+      payload: { parentIdeaId },
+    })
+    return success({ event })
+  } catch {
+    return rejected({ code: 'operation-failed', message: 'the derivation edge could not be written' })
+  }
+}
+
+/**
+ * Close one idea line as a dead end — a documented No: the wiki record
+ * flips to `failed` with the reason, and one `knowledge.idea.failed` event
+ * lands in the ledger under the PANEL actor (an explicit, user-refusable
+ * action, so origin attribution is 'user' by construction — whoever bears
+ * the uncertainty of the No owns it). The reason is required and capped at
+ * {@link IDEA_CLOSE_REASON_MAX_CHARS} characters; only an active line can
+ * be closed (an adopted line is a merge, not a dead end). Dead ends are
+ * never pruned — every ✗ stays on the tree with its reason and its GUT
+ * number.
+ * @param deps - open wiki domain.
+ * @param request - the idea plus its one-line lesson.
+ * @returns the stored close event.
+ */
+export async function closeIdeaRemote(
+  deps: LedgerDeps,
+  request: {
+    ideaId: string
+    reason: string
+  },
+): Promise<ResearchCloseIdeaResult> {
+  const { ideaId, reason } = request
+  if (typeof reason !== 'string' || reason.trim() === '') {
+    return rejected({ code: 'invalid-input', message: 'close reason must not be empty' })
+  }
+  if (reason.length > IDEA_CLOSE_REASON_MAX_CHARS) {
+    return rejected({
+      code: 'invalid-input',
+      message: `close reason is capped at ${IDEA_CLOSE_REASON_MAX_CHARS} characters`,
+    })
+  }
+  const idea = deps.domain.table('ideas').get(ideaId)
+  if (idea === undefined) {
+    return rejected({ code: 'invalid-input', message: `unknown ideaId: ${ideaId}` })
+  }
+  if (idea.status === 'failed') {
+    return rejected({ code: 'invalid-input', message: 'that line is already closed (a documented No)' })
+  }
+  if (idea.status === 'adopted') {
+    return rejected({ code: 'invalid-input', message: 'an adopted line is a merge, not a dead end' })
+  }
+  try {
+    await deps.domain.table('ideas').update(ideaId, current => ({
+      ...current,
+      status: 'failed' as const,
+      failureReason: reason,
+    }))
+    const event = await appendEvent(deps.domain, {
+      actor: PANEL_ACTOR,
+      action: 'knowledge.idea.failed',
+      refs: { ideaId },
+      payload: { reason },
+    })
+    return success({ event })
+  } catch {
+    return rejected({ code: 'operation-failed', message: 'the close could not be written' })
   }
 }

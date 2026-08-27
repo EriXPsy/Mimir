@@ -12,12 +12,13 @@
 
 import { useEffect, useState } from 'react'
 import type { EventRecord, ResearchEventFilter, ResearchGenerateBriefOptions, ResearchProgressReportOptions } from 'dsh-mimir/types'
-import type { ResearchBriefView, ResearchFailureView, ResearchLedgerView, ResearchReportView } from './controller.ts'
+import type { ResearchBriefView, ResearchFailureView, ResearchLedgerView, ResearchReportView, ResearchWorktreeSlice } from './controller.ts'
 import type { ResearchKey } from './locales.ts'
 import type { ResearchT } from './view-common.ts'
 import { renderMarkdown } from './MarkdownView.tsx'
 import { ViewHead } from './ViewHead.tsx'
 import { CognitiveBriefView } from './CognitiveBriefView.tsx'
+import { WorktreeView } from './WorktreeView.tsx'
 import {
   ACTOR_KEYS, LEDGER_LIST_LIMIT, LEDGER_WINDOWS,
   ledgerIsDestructive, ledgerPayloadLine, ledgerTimeParts, ledgerWindowFilter,
@@ -70,11 +71,13 @@ function LedgerRow({ event, t }: {
  * @returns the ledger view.
  */
 export function LedgerView({
-  ledger, report, brief, selectedProjectId, loadLedger, generateReport, generateBrief, addJournal, t,
+  ledger, report, brief, worktree, selectedProjectId, loadLedger, generateReport, generateBrief, addJournal,
+  ensureWorktree, refreshWorktree, setMainline, setIdeaParent, closeIdea, t,
 }: {
   readonly ledger: ResearchLedgerView
   readonly report: ResearchReportView
   readonly brief: ResearchBriefView
+  readonly worktree: ResearchWorktreeSlice
   readonly selectedProjectId: string | null
   readonly loadLedger: (filter: ResearchEventFilter) => void
   readonly generateReport: (options: ResearchProgressReportOptions) => Promise<ResearchFailureView | null>
@@ -84,6 +87,16 @@ export function LedgerView({
     projectId: string | null,
     refs?: { ideaId?: string | undefined; valence?: number | undefined; arousal?: number | undefined },
   ) => Promise<ResearchFailureView | null>
+  /** Load the worktree once, on the ledger view's first open. */
+  readonly ensureWorktree: () => void
+  /** Re-fetch the worktree (the card's refresh button). */
+  readonly refreshWorktree: () => void
+  /** Move the mainline ref (one user declaration). */
+  readonly setMainline: (lineId: string) => Promise<ResearchFailureView | null>
+  /** Declare (or clear) one derivation edge. */
+  readonly setIdeaParent: (ideaId: string, parentIdeaId: string | null) => Promise<ResearchFailureView | null>
+  /** Close one idea lane as a documented No. */
+  readonly closeIdea: (ideaId: string, reason: string) => Promise<ResearchFailureView | null>
   readonly t: ResearchT
 }) {
   // Named ledgerWindow (not `window`): the global window (timers, clipboard)
@@ -98,6 +111,10 @@ export function LedgerView({
   useEffect(() => {
     loadLedger(ledgerWindowFilter(ledgerWindow, scopedProjectId, Date.now()))
   }, [ledgerWindow, scopedProjectId, loadLedger])
+  // The worktree loads once on the view's first open (the tab mounts here).
+  useEffect(() => {
+    ensureWorktree()
+  }, [ensureWorktree])
 
   const refresh = (): void => {
     loadLedger(ledgerWindowFilter(ledgerWindow, scopedProjectId, Date.now()))
@@ -181,6 +198,18 @@ export function LedgerView({
           {t('ledger.scope.project')}
         </button>
       </div>
+
+      {/* The worktree (S2): the process as branches, dead ends, and the
+          mainline ref — the structural summary above the sheets. */}
+      <WorktreeView
+        worktree={worktree}
+        refreshWorktree={refreshWorktree}
+        setMainline={setMainline}
+        setIdeaParent={setIdeaParent}
+        closeIdea={closeIdea}
+        refreshLedger={refresh}
+        t={t}
+      />
 
       {/* The one-click progress report of the selected window. */}
       <section className={css.reportCard}>

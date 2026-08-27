@@ -517,6 +517,32 @@ export interface ResearchPanelInjected {
     refs?: { ideaId?: string | undefined; valence?: number | undefined; arousal?: number | undefined },
   ) => Promise<ResearchFailureView | null>
   /**
+   * Load the worktree (S2) once, on the ledger view's first open: the
+   * research process as branches, dead ends, and the mainline ref.
+   */
+  ensureWorktree: () => void
+  /** Re-fetch the worktree (the card's refresh button, or after a write). */
+  refreshWorktree: () => void
+  /**
+   * Move the mainline ref — the user's explicit declaration of the current
+   * mainline (the system never ranks lines into it).
+   * @param lineId - idea id or `project:<id>`.
+   * @returns null on success, the settled failure view otherwise.
+   */
+  setMainline: (lineId: string) => Promise<ResearchFailureView | null>
+  /**
+   * Declare (or clear, with null) one derivation edge — a branch point in
+   * the surveyor's own words; never inferred.
+   * @returns null on success, the settled failure view otherwise.
+   */
+  setIdeaParent: (ideaId: string, parentIdeaId: string | null) => Promise<ResearchFailureView | null>
+  /**
+   * Close one idea lane as a dead end — a documented No with its one-line
+   * lesson; dead ends are never pruned from the tree.
+   * @returns null on success, the settled failure view otherwise.
+   */
+  closeIdea: (ideaId: string, reason: string) => Promise<ResearchFailureView | null>
+  /**
    * Export the whole wiki as one snapshot (the download button).
    * @returns the snapshot, or the settled failure view.
    */

@@ -926,3 +926,72 @@ export type ResearchGenerateBriefResult = ResearchResult<{
 /** `addJournalEntry` result: the stored journal event (the L2 write). */
 export type ResearchAddJournalEntryResult = ResearchResult<{ readonly event: EventRecord }>
 
+/* ── Worktree (S2) wire payloads — the research process as a working tree ── */
+
+/** Lane lifecycle as the worktree renders it (idea records are the state). */
+export type ResearchWorktreeLaneStatus = 'open' | 'failed' | 'adopted'
+
+/**
+ * One lane of the research worktree, label-resolved for the view: a research
+ * line (idea, or `project:<id>`) wearing branch semantics — status, declared
+ * parent, activity dates, and the documented-No numbers. E0 by construction:
+ * numbers, dates, and user-declared edges only, no inferred genealogy.
+ */
+export interface ResearchWorktreeLaneView {
+  readonly lineId: string
+  readonly label: string
+  readonly status: ResearchWorktreeLaneStatus
+  /** The lane's brief state vocabulary (`settled` once terminal). */
+  readonly state: 'settled' | 'dominant' | 'stalled' | 'converging' | 'returning-side' | 'exploring'
+  /** The user-declared parent line, or null for a root branch. */
+  readonly parentLineId: string | null
+  /** The parent line's label (the declaring user's own landmark name). */
+  readonly parentLabel: string | null
+  readonly firstSeen: string
+  readonly lastSeen: string
+  readonly eventCount: number
+  readonly drift: number
+  /** The close adjudication's timestamp; null while open. */
+  readonly closedAt: string | null
+  /** The wiki record's failure reason — the documented No's own words. */
+  readonly closeReason: string | null
+  /** Failed lanes: days from the lane's last touch to its close (the GUT number). */
+  readonly gutDays: number | null
+  /** Open lanes: days since the lane's last touch to the derivation time. */
+  readonly idleDays: number | null
+}
+
+/** One mainline declaration (one ref move), label-resolved. */
+export interface ResearchWorktreeMainlineView {
+  readonly lineId: string
+  readonly label: string
+  readonly declaredAt: string
+}
+
+/** `getWorktree` payload: the whole derived worktree (a pure L0 projection). */
+export interface ResearchWorktreeView {
+  readonly derivedAt: string
+  readonly lanes: readonly ResearchWorktreeLaneView[]
+  /** The current mainline ref, or null before the first declaration. */
+  readonly mainline: ResearchWorktreeMainlineView | null
+  /** Every declaration in order — the mainline reflog (the 大改变 record). */
+  readonly mainlineHistory: readonly ResearchWorktreeMainlineView[]
+  readonly counts: {
+    readonly open: number
+    readonly failed: number
+    readonly adopted: number
+  }
+}
+
+/** `getWorktree` result: the derived worktree (a pure query, writes nothing). */
+export type ResearchGetWorktreeResult = ResearchResult<{ readonly worktree: ResearchWorktreeView }>
+
+/** `setMainline` result: the stored `cbe.mainline.set` event (one ref move). */
+export type ResearchSetMainlineResult = ResearchResult<{ readonly event: EventRecord }>
+
+/** `setIdeaParent` result: the stored `cbe.idea.parent.set` event (a declared edge). */
+export type ResearchSetIdeaParentResult = ResearchResult<{ readonly event: EventRecord }>
+
+/** `closeIdea` result: the stored `knowledge.idea.failed` event (a documented No). */
+export type ResearchCloseIdeaResult = ResearchResult<{ readonly event: EventRecord }>
+

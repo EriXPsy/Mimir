@@ -13,6 +13,7 @@ import type { RemoteResult } from '@deepseek-ai/dsh-typert-protocol'
 import type { HostObservable } from '@deepseek-ai/dsh-client-ui-slots'
 import type { ResearchKey } from './locales.ts'
 import { figureBlockOf, findFigureReferenceLine, insertFigureBlock, isSvgFigure, svgConvertedRelPaths } from './figure-insert.ts'
+import { WORKTREE_REASON_MAX_CHARS } from './worktree-view.ts'
 import { anySubscriptionDue } from './subscriptions.ts'
 import { metricFigureCaption, metricFigureFileName, metricFigureSvg } from './metric-figure.ts'
 import type { MetricChartRow } from './view-common.ts'
@@ -32,6 +33,11 @@ import type {
   ResearchArtifactResult,
   ResearchArxivSubscriptionsResult,
   ResearchAddJournalEntryResult,
+  ResearchCloseIdeaResult,
+  ResearchGetWorktreeResult,
+  ResearchSetIdeaParentResult,
+  ResearchSetMainlineResult,
+  ResearchWorktreeView,
   ResearchBriefQuestion,
   ResearchBackupStatusView,
   ResearchBibliographyResult,
@@ -295,6 +301,19 @@ export interface ResearchRemote {
     valence?: number | undefined
     arousal?: number | undefined
   }) => Promise<RemoteResult<ResearchAddJournalEntryResult>>
+  getWorktree: () => Promise<RemoteResult<ResearchGetWorktreeResult>>
+  setMainline: (request: {
+    ideaId?: string | undefined
+    projectId?: string | undefined
+  }) => Promise<RemoteResult<ResearchSetMainlineResult>>
+  setIdeaParent: (request: {
+    ideaId: string
+    parentIdeaId: string | null
+  }) => Promise<RemoteResult<ResearchSetIdeaParentResult>>
+  closeIdea: (request: {
+    ideaId: string
+    reason: string
+  }) => Promise<RemoteResult<ResearchCloseIdeaResult>>
 }
 
 /** Quiet period after the last keystroke before the draft autosaves. */
@@ -491,6 +510,13 @@ export interface ResearchBriefView {
   readonly failure: ResearchFailureView | null
 }
 
+/** The worktree (S2) slice: the derived working tree, cold until first opened. */
+export interface ResearchWorktreeSlice {
+  readonly status: ResearchLoadStatus
+  readonly view: ResearchWorktreeView | null
+  readonly failure: ResearchFailureView | null
+}
+
 /** The selected project's `references.bib` view, edited entry-wise through the panel. */
 export interface ResearchBibView {
   readonly projectId: string
@@ -561,6 +587,8 @@ export interface ResearchView {
   readonly report: ResearchReportView
   /** The ledger view's cognitive brief (CBE roadbook); `idle` before the first generation. */
   readonly brief: ResearchBriefView
+  /** The ledger view's worktree (S2): the process as branches, dead ends, and the mainline ref. */
+  readonly worktree: ResearchWorktreeSlice
   /** The corner toast queue (oldest first); the host component sweeps expiries. */
   readonly toasts: readonly ResearchToast[]
   /** Scheduled-backup status for the overview; null until loaded (or on failure). */
@@ -603,6 +631,7 @@ const INITIAL_VIEW: ResearchView = Object.freeze({
   ledger: Object.freeze({ status: 'cold', list: Object.freeze([]), failure: null }),
   report: Object.freeze({ status: 'idle', markdown: '', generatedAt: null, eventCount: null, failure: null }),
   brief: Object.freeze({ status: 'idle', markdown: '', generatedAt: null, eventCount: null, questions: Object.freeze([]), failure: null }),
+  worktree: Object.freeze({ status: 'cold', view: null, failure: null }),
   toasts: Object.freeze([]),
   backup: null,
   paperJump: null,
@@ -650,6 +679,8 @@ export class ResearchController implements HostObservable<ResearchView> {
   private ledgerGeneration = 0
   private reportGeneration = 0
   private briefGeneration = 0
+  /** In-flight worktree load guard (the ensure/refresh contract). */
+  private worktreePromise: Promise<void> | null = null
   private figuresInFlight = false
   private meetingsGeneration = 0
   private meetingsInFlight = false
@@ -969,6 +1000,130 @@ export class ResearchController implements HostObservable<ResearchView> {
       const result = carried.value
       if (!result.ok) return businessFailure(result.error)
       this.notify('success', 'journal.added')
+      return null
+    } catch (error) {
+      return transportFailure(error)
+    }
+  }
+
+  /**
+   * Load the worktree (S2) slice: the derived working tree over the full
+   * ledger — lanes with their statuses and documented-No numbers, the
+   * declared parent edges, the mainline ref and its reflog. Publishing
+   * contract mirrors {@link generateBrief}: loading → ready/error, the
+   * previous view kept while loading.
+   */
+  private async loadWorktree(): Promise<void> {
+    this.publish({
+      worktree: Object.freeze({ status: 'loading', view: this.view.worktree.view, failure: null }),
+    })
+    try {
+      const carried = await this.remote.getWorktree()
+      if (!carried.ok) {
+        const failure = failureOf(carried.error.code, carried.error.message)
+        this.publish({ worktree: Object.freeze({ status: 'error', view: null, failure }) })
+        return
+      }
+      const result = carried.value
+      if (!result.ok) {
+        const failure = businessFailure(result.error)
+        this.publish({ worktree: Object.freeze({ status: 'error', view: null, failure }) })
+        return
+      }
+      this.publish({
+        worktree: Object.freeze({ status: 'ready', view: result.value.worktree, failure: null }),
+      })
+    } catch (error) {
+      const failure = transportFailure(error)
+      this.publish({ worktree: Object.freeze({ status: 'error', view: null, failure }) })
+    }
+  }
+
+  /** Load the worktree once, on the ledger view's first open. */
+  ensureWorktree(): void {
+    if (this.view.worktree.status === 'ready' || this.worktreePromise !== null) return
+    this.worktreePromise = this.loadWorktree().finally(() => { this.worktreePromise = null })
+  }
+
+  /** Re-fetch the worktree (after a structural write, or the refresh button). */
+  refreshWorktree(): void {
+    if (this.worktreePromise !== null) return
+    this.worktreePromise = this.loadWorktree().finally(() => { this.worktreePromise = null })
+  }
+
+  /** Refresh the worktree behind an in-flight guard, used by the write verbs. */
+  private requeueWorktree(): void {
+    if (this.worktreePromise !== null) return
+    this.worktreePromise = this.loadWorktree().finally(() => { this.worktreePromise = null })
+  }
+
+  /**
+   * Move the mainline ref (one explicit user declaration; the system never
+   * ranks lines into it). A success toasts once and refreshes the tree so
+   * the new ref renders immediately.
+   * @param lineId - the lane to declare (idea id or `project:<id>`).
+   * @returns null on success, the settled failure view otherwise.
+   */
+  async setMainline(lineId: string): Promise<ResearchFailureView | null> {
+    const request = lineId.startsWith('project:')
+      ? { projectId: lineId.slice('project:'.length) }
+      : { ideaId: lineId }
+    try {
+      const carried = await this.remote.setMainline(request)
+      if (!carried.ok) return failureOf(carried.error.code, carried.error.message)
+      const result = carried.value
+      if (!result.ok) return businessFailure(result.error)
+      this.notify('success', 'worktree.mainline.ready')
+      this.requeueWorktree()
+      return null
+    } catch (error) {
+      return transportFailure(error)
+    }
+  }
+
+  /**
+   * Declare (or clear, with null) one derivation edge — a branch point in
+   * the surveyor's own words; never inferred. A success toasts once and
+   * refreshes the tree.
+   * @param ideaId - the child idea lane.
+   * @param parentIdeaId - the parent idea lane, or null to clear.
+   * @returns null on success, the settled failure view otherwise.
+   */
+  async setIdeaParent(ideaId: string, parentIdeaId: string | null): Promise<ResearchFailureView | null> {
+    try {
+      const carried = await this.remote.setIdeaParent({ ideaId, parentIdeaId })
+      if (!carried.ok) return failureOf(carried.error.code, carried.error.message)
+      const result = carried.value
+      if (!result.ok) return businessFailure(result.error)
+      this.notify('success', 'worktree.parent.ready')
+      this.requeueWorktree()
+      return null
+    } catch (error) {
+      return transportFailure(error)
+    }
+  }
+
+  /**
+   * Close one idea lane as a dead end — a documented No: the reason is
+   * required, capped at {@link WORKTREE_REASON_MAX_CHARS} characters, and
+   * re-validated server-side. A success toasts once and refreshes the tree;
+   * the caller refreshes the ledger timeline so the event lands there too.
+   * @param ideaId - the idea lane to close.
+   * @param reason - the one-line lesson (what this No taught).
+   * @returns null on success, the settled failure view otherwise.
+   */
+  async closeIdea(ideaId: string, reason: string): Promise<ResearchFailureView | null> {
+    if (reason.trim() === '') return failureOf('invalid-input', 'close reason must not be empty')
+    if (reason.length > WORKTREE_REASON_MAX_CHARS) {
+      return failureOf('invalid-input', `close reason is capped at ${WORKTREE_REASON_MAX_CHARS} characters`)
+    }
+    try {
+      const carried = await this.remote.closeIdea({ ideaId, reason })
+      if (!carried.ok) return failureOf(carried.error.code, carried.error.message)
+      const result = carried.value
+      if (!result.ok) return businessFailure(result.error)
+      this.notify('success', 'worktree.closed')
+      this.requeueWorktree()
       return null
     } catch (error) {
       return transportFailure(error)

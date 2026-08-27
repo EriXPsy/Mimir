@@ -161,6 +161,19 @@ export type {
   CbeWikiSnapshot,
   InferenceCard,
 } from './cognitive-map.ts'
+export {
+  deriveWorktree,
+  ideaParentEdges,
+  MAINLINE_ACTION,
+  IDEA_PARENT_ACTION,
+  IDEA_CLOSE_REASON_MAX_CHARS,
+} from './worktree.ts'
+export type {
+  CbeWorktree,
+  CbeWorktreeLane,
+  CbeWorktreeLaneStatus,
+  CbeMainlineDeclaration,
+} from './worktree.ts'
 export { parseLatexErrors } from './latex-log.ts'
 export type { LatexIssue } from './latex-log.ts'
 export { parseTexOutline } from './outline.ts'
