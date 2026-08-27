@@ -1968,15 +1968,17 @@ describe('ResearchController worktree (S2)', () => {
         parentLineId: null, parentLabel: null,
         firstSeen: '2026-08-01T00:00:00.000Z', lastSeen: '2026-08-26T00:00:00.000Z',
         eventCount: 6, drift: 4.5, closedAt: null, closeReason: null, gutDays: null, idleDays: 1,
+        touches: [],
       },
       {
         lineId: 'i2', label: 'Old branch', status: 'failed', state: 'settled',
         parentLineId: 'i1', parentLabel: 'Idea One',
         firstSeen: '2026-08-02T00:00:00.000Z', lastSeen: '2026-08-10T00:00:00.000Z',
         eventCount: 3, drift: -1.2, closedAt: '2026-08-10T00:00:00.000Z', closeReason: 'no effect', gutDays: 4, idleDays: null,
+        touches: [],
       },
     ],
-    mainline: { lineId: 'i1', label: 'Idea One', declaredAt: '2026-08-20T00:00:00.000Z' },
+    mainline: { lineId: 'i1', label: 'Idea One', declaredAt: '2026-08-20T00:00:00.000Z' , touches: [] },
     mainlineHistory: [{ lineId: 'i1', label: 'Idea One', declaredAt: '2026-08-20T00:00:00.000Z' }],
     counts: { open: 1, failed: 1, adopted: 0 },
   }

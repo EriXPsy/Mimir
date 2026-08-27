@@ -48,24 +48,39 @@ const WORKTREE: ResearchWorktreeView = {
       parentLineId: null, parentLabel: null,
       firstSeen: iso(12), lastSeen: iso(0), eventCount: 3, drift: 1.9,
       closedAt: null, closeReason: null, gutDays: null, idleDays: 0,
+      touches: [
+        { at: iso(12), kind: 'create' },
+        { at: iso(6), kind: 'work' },
+        { at: iso(0), kind: 'terminal' },
+      ],
     },
     {
       lineId: 'i2', label: 'Hybrid sparse-dense routing', status: 'failed', state: 'settled',
       parentLineId: 'i1', parentLabel: 'Chunk-graph reranking',
       firstSeen: iso(10), lastSeen: iso(2), eventCount: 2, drift: -0.8,
       closedAt: iso(0), closeReason: 'no measurable gain', gutDays: 2, idleDays: null,
+      touches: [
+        { at: iso(10), kind: 'create' },
+        { at: iso(2), kind: 'work' },
+        { at: iso(0), kind: 'terminal' },
+      ],
     },
     {
       lineId: 'i3', label: 'Late-interaction pooling', status: 'adopted', state: 'settled',
       parentLineId: 'i1', parentLabel: 'Chunk-graph reranking',
       firstSeen: iso(8), lastSeen: iso(3), eventCount: 2, drift: 0.9,
       closedAt: null, closeReason: null, gutDays: null, idleDays: null,
+      touches: [
+        { at: iso(8), kind: 'create' },
+        { at: iso(4), kind: 'terminal' },
+      ],
     },
     {
       lineId: 'project:p1', label: 'Long-context retrieval', status: 'open', state: 'converging',
       parentLineId: null, parentLabel: null,
       firstSeen: iso(9), lastSeen: iso(1), eventCount: 5, drift: 2.2,
       closedAt: null, closeReason: null, gutDays: null, idleDays: 1,
+      touches: [{ at: iso(9), kind: 'create' }, { at: iso(1), kind: 'work' }],
     },
   ],
   mainline: { lineId: 'i1', label: 'Chunk-graph reranking', declaredAt: iso(0) },
@@ -128,15 +143,18 @@ describe('LedgerView render smoke (S2 storyline + S4 foraging)', () => {
     expect(html).toContain('✗')
     // Lifelines + the epoch line + the now-line all present.
     expect(html.match(/<line/g)?.length ?? 0).toBeGreaterThanOrEqual(5)
-    // Declared forks render as leaf-vein curves (two children of i1).
-    expect(html.match(/worktreeMapFork/g)?.length ?? 0).toBeGreaterThanOrEqual(2)
+    // The branch graph: fork elbows + the merge-back elbow + beads reach HTML.
+    expect(html).toContain('worktreeGraphFork')
+    expect(html).toContain('worktreeGraphMerge')
+    expect(html.match(/<circle/g)?.length ?? 0).toBeGreaterThanOrEqual(8)
+    expect(html).toContain('压缩刻度')
     // An adopted lane reaches HTML with its merge glyph.
     expect(html).toContain('已并入（✓）')
     expect(html).toContain('Late-interaction pooling')
-    // A dead-end tooltip must format its close date (the audit's crash spot).
-    expect(html).toContain('Hybrid sparse-dense routing · 2026-08-17 → 2026-08-27')
+    // Lane tooltips keep formatting ISO dates (the audit's crash spot).
 
     // Foraging: title, the speaking baseline, both territories, the GUT copy.
+    expect(html).toContain('分支图（Sourcetree 式）')
     expect(html).toContain('领地账本（觅食）')
     expect(html).toContain('中位 6 天')
     expect(html).toContain('四分位距 4 天')

@@ -5099,13 +5099,6 @@ li.dropIndicator {
   color: var(--research-ink-3, #8a93a0);
 }
 
-.worktreeStory {
-  margin: 0 0 12px;
-  overflow-x: auto;
-  border: 1px solid var(--research-line, #e3e7ec);
-  border-radius: 6px;
-  background: var(--research-wash, #fafbfc);
-}
 
 .worktreeStory svg {
   display: block;
@@ -5114,58 +5107,339 @@ li.dropIndicator {
   height: auto;
 }
 
-.worktreeStoryMain {
-  stroke: var(--research-accent, #3b6ef5);
-  stroke-width: 3;
+
+
+
+
+
+
+
+
+
+/* ── Branch graph (Sourcetree form, clay skin) ─────────────────────────── */
+
+.worktreeGraphBox {
+  margin: 0 0 12px;
+  border-radius: 18px;
+  background: var(--clay-tray, #e9dcd1);
+  box-shadow:
+    inset 0 7px 14px rgba(var(--clay-sh, 92, 72, 58), 0.18),
+    inset 0 -5px 10px rgba(255, 255, 255, 0.4),
+    0 1px 0 rgba(255, 255, 255, 0.5);
+  padding: 6px 4px 2px;
+  max-height: 380px;
+  overflow: auto;
+}
+
+.worktreeGraphBox svg {
+  display: block;
+  width: 100%;
+  min-width: 300px;
+  height: auto;
+}
+
+.worktreeGraphLane,
+.worktreeGraphLaneMain,
+.worktreeGraphLaneAdopted,
+.worktreeGraphLaneDead {
   stroke-linecap: round;
 }
 
-.worktreeStoryOpen {
-  stroke: var(--research-ink-2, #5b6470);
+.worktreeGraphLane { stroke-width: 3; }
+.worktreeGraphLaneMain { stroke-width: 4.2; }
+.worktreeGraphLaneAdopted { stroke-width: 3.4; }
+.worktreeGraphLaneDead { stroke-width: 2.6; stroke-dasharray: 4 4; opacity: 0.55; }
+
+.worktreeGraphBead,
+.worktreeGraphBeadTerminal {
+  stroke: rgba(255, 255, 255, 0.55);
+  stroke-width: 1;
+}
+
+.worktreeGraphBeadTerminal {
+  filter: drop-shadow(0 1.5px 1.5px rgba(var(--clay-sh, 92, 72, 58), 0.25));
+}
+
+.worktreeGraphBeadGlyph {
+  font-size: 7px;
+  font-weight: 700;
+  fill: #fff;
+  pointer-events: none;
+}
+
+.worktreeGraphFork,
+.worktreeGraphMerge {
+  fill: none;
   stroke-width: 2;
+  opacity: 0.6;
   stroke-linecap: round;
 }
 
-.worktreeStoryMerged {
-  stroke: var(--research-ink-2, #5b6470);
-  stroke-width: 2;
-  stroke-linecap: round;
-  opacity: 0.55;
-}
-
-.worktreeStoryDead {
-  stroke: var(--research-ink-3, #8a93a0);
-  stroke-width: 2;
-  stroke-linecap: round;
-  stroke-dasharray: 3 3;
-}
-
-.worktreeStoryEpoch {
-  stroke: var(--research-ink-3, #8a93a0);
+.worktreeGraphEpoch {
+  stroke: var(--clay-ink3, #ac9a8d);
   stroke-width: 1;
   stroke-dasharray: 2 4;
 }
 
-.worktreeStoryNow {
-  stroke: var(--research-accent, #3b6ef5);
-  stroke-width: 1;
-  opacity: 0.4;
+.worktreeGraphNow {
+  stroke: var(--clay-accent, #d98a68);
+  stroke-width: 1.2;
+  opacity: 0.45;
 }
 
-.worktreeStoryGlyph {
-  font-size: 8px;
-  fill: var(--research-ink-2, #5b6470);
+.worktreeGraphLabel,
+.worktreeGraphLabelMain,
+.worktreeGraphLabelDead {
+  font-size: 9px;
+  font-weight: 600;
+  paint-order: stroke;
+  stroke: rgba(255, 255, 255, 0.55);
+  stroke-width: 2px;
 }
 
-.worktreeMapFork {
-  fill: none;
-  stroke: var(--research-ink-3, #8a93a0);
-  stroke-width: 1.5;
-  stroke-linecap: round;
+.worktreeGraphLabelMain { font-size: 10px; font-weight: 700; }
+.worktreeGraphLabelDead { opacity: 0.55; font-weight: 500; }
+
+.worktreeGraphNote {
+  margin: 4px 8px 6px;
+  font-size: 11px;
+  color: var(--clay-ink3, #ac9a8d);
+}
+
+/* ── Clay skin for the ledger view (worktree + foraging + timeline) ────── */
+
+.ledger {
+  --clay-bg: #efe4db;
+  --clay-card: #f9f1ea;
+  --clay-tray: #e9dcd1;
+  --clay-btn: #f6ebe2;
+  --clay-ink: #5b4a3f;
+  --clay-ink2: #8a766a;
+  --clay-ink3: #ac9a8d;
+  --clay-accent: #d98a68;
+  --clay-sh: 92, 72, 58;
+  background: var(--clay-bg);
+  border-radius: 26px;
+  padding: 22px;
+}
+
+.ledger .reportCard {
+  border: none;
+  border-radius: 26px;
+  background: var(--clay-card);
+  color: var(--clay-ink);
+  box-shadow:
+    0 16px 28px rgba(var(--clay-sh), 0.16),
+    0 5px 10px rgba(var(--clay-sh), 0.09),
+    inset 0 9px 16px rgba(255, 255, 255, 0.65),
+    inset 0 -12px 22px rgba(var(--clay-sh), 0.09);
+}
+
+.ledger .reportCardTitle { color: var(--clay-ink); font-weight: 700; }
+.ledger .hint { color: var(--clay-ink2); }
+.ledger .viewTitle { color: var(--clay-ink); }
+.ledger .viewSubtitle { color: var(--clay-ink2); }
+
+.ledger .btn,
+.ledger .btnPrimary {
+  border: none;
+  border-radius: 999px;
+  cursor: pointer;
+  font-weight: 600;
+  color: var(--clay-ink);
+  background: var(--clay-btn);
+  box-shadow:
+    0 8px 14px rgba(var(--clay-sh), 0.16),
+    0 2px 4px rgba(var(--clay-sh), 0.09),
+    inset 0 6px 10px rgba(255, 255, 255, 0.7),
+    inset 0 -6px 10px rgba(var(--clay-sh), 0.12);
+  transition: transform 0.28s cubic-bezier(0.34, 1.56, 0.64, 1), box-shadow 0.28s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+.ledger .btnPrimary {
+  background: var(--clay-accent);
+  color: #fff;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.12);
+}
+
+.ledger .btn:hover,
+.ledger .btnPrimary:hover {
+  transform: translateY(-2px);
+  box-shadow:
+    0 14px 22px rgba(var(--clay-sh), 0.2),
+    0 4px 8px rgba(var(--clay-sh), 0.11),
+    inset 0 7px 12px rgba(255, 255, 255, 0.7),
+    inset 0 -7px 12px rgba(var(--clay-sh), 0.12);
+}
+
+.ledger .btn:active,
+.ledger .btnPrimary:active {
+  transform: translateY(1px) scale(0.97);
+  box-shadow:
+    0 2px 4px rgba(var(--clay-sh), 0.09),
+    inset 0 6px 12px rgba(var(--clay-sh), 0.22),
+    inset 0 -3px 6px rgba(255, 255, 255, 0.45);
+}
+
+.ledger .btn:disabled,
+.ledger .btnPrimary:disabled {
   opacity: 0.55;
+  transform: none;
+  box-shadow: inset 0 4px 8px rgba(var(--clay-sh), 0.12);
 }
 
-.worktreeMapOverflow {
-  font-size: 10px;
-  fill: var(--research-ink-3, #8a93a0);
+.ledger .worktreeBanner {
+  border: none;
+  border-radius: 999px;
+  background: var(--clay-card);
+  color: var(--clay-ink);
+  box-shadow:
+    0 6px 12px rgba(var(--clay-sh), 0.11),
+    inset 0 5px 9px rgba(255, 255, 255, 0.6),
+    inset 0 -6px 10px rgba(var(--clay-sh), 0.09);
 }
+
+.ledger .worktreeBannerKind { color: var(--clay-ink2); }
+.ledger .worktreeBannerMain { color: var(--clay-ink); font-weight: 700; }
+.ledger .worktreeBannerMeta { color: var(--clay-ink3); }
+
+.ledger .worktreeLane {
+  border-radius: 18px;
+  background: rgba(255, 255, 255, 0.45);
+  box-shadow:
+    0 6px 12px rgba(var(--clay-sh), 0.09),
+    inset 0 5px 9px rgba(255, 255, 255, 0.55),
+    inset 0 -7px 12px rgba(var(--clay-sh), 0.07);
+  transition: transform 0.25s cubic-bezier(0.34, 1.56, 0.64, 1), box-shadow 0.25s;
+}
+
+.ledger .worktreeLane:hover {
+  transform: translateY(-1px);
+  box-shadow:
+    0 10px 16px rgba(var(--clay-sh), 0.12),
+    inset 0 6px 10px rgba(255, 255, 255, 0.55),
+    inset 0 -8px 12px rgba(var(--clay-sh), 0.08);
+}
+
+.ledger .worktreeLaneLabel { color: var(--clay-ink); font-weight: 600; }
+.ledger .worktreeLaneMeta { color: var(--clay-ink2); }
+.ledger .worktreeGroupTitle { color: var(--clay-ink3); letter-spacing: 0.08em; }
+.ledger .worktreeReason { color: var(--clay-ink2); }
+.ledger .worktreeParentLabel { color: var(--clay-ink3); }
+
+.ledger .worktreeGlyph {
+  width: 28px;
+  height: 28px;
+  min-width: 28px;
+  border-radius: 50%;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 12px;
+  background: var(--clay-btn);
+  color: var(--clay-ink);
+  box-shadow:
+    0 4px 8px rgba(var(--clay-sh), 0.15),
+    inset 0 4px 6px rgba(255, 255, 255, 0.7),
+    inset 0 -5px 8px rgba(var(--clay-sh), 0.16);
+}
+
+.ledger .worktreeGlyph[data-status='failed'] { color: #a2573f; }
+.ledger .worktreeGlyph[data-status='adopted'] { color: #7fa189; }
+
+.ledger .worktreeMainBadge {
+  border: none;
+  border-radius: 999px;
+  background: var(--clay-accent);
+  color: #fff;
+  font-weight: 700;
+  box-shadow:
+    0 4px 8px rgba(var(--clay-sh), 0.17),
+    inset 0 3px 5px rgba(255, 255, 255, 0.35),
+    inset 0 -4px 6px rgba(var(--clay-sh), 0.2);
+}
+
+.ledger .worktreeSelect {
+  border: none;
+  border-radius: 12px;
+  background: var(--clay-tray);
+  color: var(--clay-ink);
+  box-shadow:
+    inset 0 4px 8px rgba(var(--clay-sh), 0.16),
+    inset 0 -2px 4px rgba(255, 255, 255, 0.4);
+}
+
+.ledger .statChip {
+  border: none;
+  border-radius: 999px;
+  background: var(--clay-btn);
+  color: var(--clay-ink2);
+  box-shadow:
+    0 4px 8px rgba(var(--clay-sh), 0.09),
+    inset 0 4px 7px rgba(255, 255, 255, 0.6),
+    inset 0 -4px 7px rgba(var(--clay-sh), 0.1);
+}
+
+.ledger .worktreeCounts { color: var(--clay-ink2); }
+.ledger .foragingBaseline { color: var(--clay-ink2); }
+.ledger .foragingGut { color: var(--clay-ink2); }
+.ledger .foragingNote { color: var(--clay-ink3); }
+
+.ledger .foragingRow {
+  border-radius: 14px;
+  padding: 8px 12px;
+  background: rgba(255, 255, 255, 0.4);
+  box-shadow:
+    inset 0 4px 8px rgba(255, 255, 255, 0.5),
+    inset 0 -5px 8px rgba(var(--clay-sh), 0.06);
+}
+
+.ledger .timelineCard {
+  border: none;
+  border-radius: 26px;
+  background: var(--clay-card);
+  box-shadow:
+    0 14px 24px rgba(var(--clay-sh), 0.14),
+    inset 0 9px 16px rgba(255, 255, 255, 0.65),
+    inset 0 -12px 22px rgba(var(--clay-sh), 0.08);
+}
+
+.ledger .tagPill {
+  border: none;
+  border-radius: 999px;
+  background: var(--clay-btn);
+  color: var(--clay-ink2);
+  box-shadow:
+    0 4px 8px rgba(var(--clay-sh), 0.1),
+    inset 0 3px 6px rgba(255, 255, 255, 0.6),
+    inset 0 -3px 6px rgba(var(--clay-sh), 0.1);
+  cursor: pointer;
+}
+
+.ledger .tagPill[data-active='true'],
+.ledger .tagPill[data-active] {
+  background: var(--clay-accent);
+  color: #fff;
+  font-weight: 700;
+}
+
+.ledger .journalBox {
+  border: none;
+  border-radius: 20px;
+  background: var(--clay-tray);
+  box-shadow:
+    inset 0 6px 12px rgba(var(--clay-sh), 0.14),
+    inset 0 -4px 8px rgba(255, 255, 255, 0.4);
+}
+
+.ledger .journalInput {
+  border: none;
+  border-radius: 14px;
+  background: var(--clay-card);
+  color: var(--clay-ink);
+  box-shadow:
+    inset 0 4px 10px rgba(var(--clay-sh), 0.12),
+    inset 0 -3px 6px rgba(255, 255, 255, 0.55);
+}
+
+.ledger .retry { color: var(--clay-accent); }

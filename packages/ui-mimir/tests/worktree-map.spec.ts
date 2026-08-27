@@ -1,14 +1,20 @@
 /**
- * Behavior tests for the branch-map layout (the exploration treasure map's
- * geometry): preorder contiguity over the declared forest, fork placement
- * at the child's first touch (clamped to the parent's start), the
- * visible-track cap, dangling/cyclic declarations degrading to roots
- * instead of crashes, and full determinism against input order.
+ * Behavior tests for the branch-graph layout (Sourcetree form): preorder
+ * track contiguity over the declared forest, fork elbows from the parent
+ * column into the child's first row, merge-back elbows for adopted lines,
+ * compressed-row budgeting (moments fold into <= MAX_ROWS rows), bead
+ * dedup with counts, dangling/cyclic declarations degrading to roots, and
+ * determinism against input order.
  * @module dsh-client-ui-mimir/tests/worktree-map.spec
  */
 
 import { describe, expect, it } from 'vitest'
-import { layoutWorktreeMap, WORKTREE_MAP_MAX_TRACKS } from '../src/client/worktree-map.ts'
+import {
+  beadRadius,
+  gutterLabel,
+  layoutWorktreeGraph,
+  WORKTREE_GRAPH_MAX_ROWS,
+} from '../src/client/worktree-map.ts'
 import type { ResearchWorktreeLaneView, ResearchWorktreeView } from 'dsh-mimir/types'
 
 const NOW = '2026-08-27T10:00:00.000Z'
@@ -39,6 +45,7 @@ function lane(
     closeReason: null,
     gutDays: null,
     idleDays: 0,
+    touches: [],
     ...overrides,
   }
 }
@@ -53,102 +60,95 @@ function viewOf(lanes: readonly ResearchWorktreeLaneView[]): ResearchWorktreeVie
   }
 }
 
-describe('layoutWorktreeMap', () => {
-  it('keeps every subtree contiguous in preorder (roots by first touch)', () => {
+describe('layoutWorktreeGraph', () => {
+  it('keeps subtrees contiguous in preorder and forks from the parent column', () => {
     const lanes = [
-      lane('a', 1, 20, { parentLineId: null }),
+      lane('a', 1, 20),
       lane('a1', 5, 15, { parentLineId: 'a' }),
       lane('a1a', 8, 12, { parentLineId: 'a1' }),
       lane('a2', 6, 14, { parentLineId: 'a' }),
       lane('b', 2, 10),
     ]
-    const map = layoutWorktreeMap(viewOf(lanes))
-    const order = map.nodes.map(node => node.lane.lineId)
-    expect(order).toEqual(['a', 'a1', 'a1a', 'a2', 'b'])
-    // Contiguity: a's subtree [a, a1, a1a, a2] is one block.
-    expect(order.indexOf('a2') - order.indexOf('a')).toBe(3)
-    // Forks: both children fork from a's track above theirs.
-    const forkA1 = map.forks.find(fork => fork.childLineId === 'a1')
-    const forkA1a = map.forks.find(fork => fork.childLineId === 'a1a')
-    expect(forkA1).toBeDefined()
-    expect(forkA1a).toBeDefined()
-    const trackOf = new Map(map.nodes.map(node => [node.lane.lineId, node.track]))
-    expect(trackOf.get('a')).toBeDefined()
-    expect(forkA1!.y1).toBeLessThan(forkA1!.y2) // parent above child
-    expect(forkA1a!.y1).toBeLessThan(forkA1a!.y2)
+    const graph = layoutWorktreeGraph(viewOf(lanes))
+    const xOf = new Map(graph.lanes.map(entry => [entry.lane.lineId, entry.x]))
+    expect([...xOf.keys()]).toEqual(['a', 'a1', 'a1a', 'a2', 'b'])
+    expect(xOf.get('a1')!).toBeGreaterThan(xOf.get('a')!) // child to the right
+    const fork = graph.forks.find(item => item.childLineId === 'a1')
+    expect(fork).toBeDefined()
+    expect(fork!.x1).toBe(xOf.get('a'))
+    expect(fork!.x2).toBe(xOf.get('a1'))
+    // The child lane starts where its fork lands.
+    const child = graph.lanes.find(entry => entry.lane.lineId === 'a1')
+    expect(fork!.y).toBe(child!.y1)
   })
 
-  it('rides each fork at the child start, clamped to the parent lifeline start', () => {
+  it('merges an adopted line back toward its declared parent', () => {
     const lanes = [
-      lane('root', 2, 20),
-      lane('child', 8, 18, { parentLineId: 'root' }),
-      lane('early', 1, 5, { parentLineId: 'root' }), // predates the parent: clamped
+      lane('a', 1, 20),
+      lane('m', 4, 9, { parentLineId: 'a', status: 'adopted' }),
     ]
-    const map = layoutWorktreeMap(viewOf(lanes))
-    const child = map.nodes.find(node => node.lane.lineId === 'child')
-    const forkChild = map.forks.find(fork => fork.childLineId === 'child')
-    expect(child).toBeDefined()
-    expect(forkChild).toBeDefined()
-    expect(forkChild!.x).toBe(child!.x1) // fork exactly at the child's start
-    const root = map.nodes.find(node => node.lane.lineId === 'root')
-    const forkEarly = map.forks.find(fork => fork.childLineId === 'early')
-    expect(forkEarly).toBeDefined()
-    expect(forkEarly!.x).toBeGreaterThanOrEqual(root!.x1) // never left of the parent's lifeline
+    const graph = layoutWorktreeGraph(viewOf(lanes))
+    expect(graph.merges).toHaveLength(1)
+    expect(graph.merges[0]?.childLineId).toBe('m')
+    expect(graph.merges[0]?.x2).toBeLessThan(graph.merges[0]?.x1) // back to the left
   })
 
-  it('caps visible tracks and never draws a fork to a hidden lane', () => {
-    const lanes: ResearchWorktreeLaneView[] = []
-    for (let index = 0; index < WORKTREE_MAP_MAX_TRACKS + 6; index += 1) {
-      lanes.push(lane(`n${String(index).padStart(2, '0')}`, index, index + 3, index === 0 ? {} : { parentLineId: 'n00' }))
+  it('folds long histories into the row budget, keeping order', () => {
+    const lanes: ResearchWorktreeLaneView[] = [lane('busy', 0, 200)]
+    const touches = []
+    for (let day = 0; day <= 200; day += 2) {
+      touches.push({ at: iso(day), kind: 'work' as const })
     }
-    const map = layoutWorktreeMap(viewOf(lanes))
-    expect(map.nodes).toHaveLength(WORKTREE_MAP_MAX_TRACKS)
-    expect(map.hiddenCount).toBe(6)
-    for (const fork of map.forks) {
-      expect(map.nodes.some(node => node.lane.lineId === fork.childLineId)).toBe(true)
-      expect(map.nodes.some(node => node.lane.lineId === fork.parentLineId)).toBe(true)
+    lanes[0] = { ...lanes[0]!, touches }
+    const graph = layoutWorktreeGraph(viewOf(lanes))
+    expect(graph.rows).toBe(WORKTREE_GRAPH_MAX_ROWS)
+    expect(graph.momentCount).toBeGreaterThan(graph.rows)
+    const ys = graph.beads.map(bead => bead.y)
+    expect(Math.max(...ys)).toBeGreaterThan(Math.min(...ys)) // spread, not stacked
+    for (const bead of graph.beads) {
+      if (bead.count > 1) expect(beadRadius(bead.kind, bead.count)).toBeGreaterThan(beadRadius(bead.kind, 1))
     }
   })
 
-  it('degrades dangling and cyclic declarations to roots, never crashes', () => {
+  it('sizes beads by kind (terminal > create > work > meta)', () => {
+    expect(beadRadius('terminal', 1)).toBeGreaterThan(beadRadius('create', 1))
+    expect(beadRadius('create', 1)).toBeGreaterThan(beadRadius('work', 1))
+    expect(beadRadius('work', 1)).toBeGreaterThan(beadRadius('meta', 1))
+  })
+
+  it('degrades dangling and cyclic declarations to roots without crashes', () => {
     const lanes = [
       lane('dangling', 3, 9, { parentLineId: 'ghost' }),
       lane('x', 1, 10, { parentLineId: 'y' }),
-      lane('y', 2, 8, { parentLineId: 'x' }), // declared cycle
+      lane('y', 2, 8, { parentLineId: 'x' }),
     ]
-    const map = layoutWorktreeMap(viewOf(lanes))
-    expect(map.nodes).toHaveLength(3) // nobody is lost
-    const ids = map.nodes.map(node => node.lane.lineId)
-    expect(ids).toContain('dangling')
-    expect(ids).toContain('x')
-    expect(ids).toContain('y')
-    // Dangling has no edge; the cycle degrades to root(x) + child(y): the
-    // true-ancestor edge (y <- x) draws, the backward edge (x <- y) does not.
-    expect(map.forks).toHaveLength(1)
-    expect(map.forks[0]?.childLineId).toBe('y')
-    expect(map.forks[0]?.parentLineId).toBe('x')
+    const graph = layoutWorktreeGraph(viewOf(lanes))
+    expect(graph.lanes).toHaveLength(3)
+    expect(graph.forks).toHaveLength(1) // y <- x only; the backward edge never draws
+    expect(graph.forks[0]?.childLineId).toBe('y')
   })
 
-  it('is deterministic against input order', () => {
+  it('is deterministic against input order and caps the gutter label', () => {
     const lanes = [
       lane('a', 1, 20),
       lane('b', 2, 10),
       lane('a1', 5, 15, { parentLineId: 'a' }),
-      lane('b1', 4, 9, { parentLineId: 'b' }),
     ]
-    const one = layoutWorktreeMap(viewOf(lanes))
-    const two = layoutWorktreeMap(viewOf([...lanes].reverse()))
+    const one = layoutWorktreeGraph(viewOf(lanes))
+    const two = layoutWorktreeGraph(viewOf([...lanes].reverse()))
     expect(JSON.stringify(one)).toBe(JSON.stringify(two))
+    expect(gutterLabel('Chunk-graph reranking')).toBe('Chunk-graph r…')
+    expect(gutterLabel('short')).toBe('short')
   })
 
-  it('ends a failed lane at its close, not at its last touch', () => {
+  it('ends a failed lane at its close row', () => {
     const lanes = [
       lane('dead', 2, 26, { status: 'failed', closedAt: iso(10), lastSeen: iso(26) }),
+      lane('open', 2, 26),
     ]
-    const map = layoutWorktreeMap(viewOf(lanes))
-    const dead = map.nodes.find(node => node.lane.lineId === 'dead')
-    const alive = layoutWorktreeMap(viewOf([lane('open', 2, 26)])).nodes[0]!
-    expect(dead).toBeDefined()
-    expect(dead!.x2).toBeLessThan(alive.x2) // the lifeline stops at the documented No
+    const graph = layoutWorktreeGraph(viewOf(lanes))
+    const dead = graph.lanes.find(entry => entry.lane.lineId === 'dead')
+    const open = graph.lanes.find(entry => entry.lane.lineId === 'open')
+    expect(dead!.y2).toBeLessThan(open!.y2) // stops at the documented No
   })
 })

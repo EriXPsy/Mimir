@@ -16,7 +16,7 @@ import type { ResearchWorktreeSlice, ResearchFailureView } from './controller.ts
 import type { ResearchKey } from './locales.ts'
 import type { ResearchT } from './view-common.ts'
 import { closeReasonState, isIdeaLane, WORKTREE_REASON_MAX_CHARS } from './worktree-view.ts'
-import { layoutWorktreeMap } from './worktree-map.ts'
+import { beadRadius, gutterLabel, layoutWorktreeGraph } from './worktree-map.ts'
 import css from './ResearchPanel.module.css'
 
 /** Whole days, rounded for display (the wire carries r3 precision). */
@@ -25,80 +25,124 @@ function days(value: number): string {
 }
 
 /**
- * The branch-and-mainline map — the exploration treasure map proper: every
- * lane a lifeline on its own track, every DECLARED derivation edge a soft
- * fork curve from parent to child (leaf-vein gesture, git grammar), the
- * mainline-declaration epochs as dashed verticals, and the now-line. Pure
- * SVG over the pure layout in worktree-map.ts — no inference, no stacking,
- * no zoom; glyphs repeat the list's vocabulary (● mainline, ⌥ open, ✓
- * merged, ✗ dead end) so the map never adds a second visual grammar.
+ * The branch graph — Sourcetree's form in a clay skin: one vertical lane
+ * per research line (time flows top→bottom toward now), declared forks as
+ * elbow curves into the child's first bead, adopted lines curve back to
+ * their declared parent (the merge), and EVERY work node is a bead —
+ * terminal outcomes largest, eureka creations next, weighted work mid,
+ * zero-weight touches smallest. Mainline-declaration epochs rule across as
+ * dashed horizontals. Compressed time (one row per moment batch, not
+ * wall-clock) is stated in the caption; magnitudes live in the list.
  * @param props - the worktree view model and copy.
- * @returns the map SVG (or nothing before any lane exists).
+ * @returns the graph SVG block (or nothing before any lane exists).
  */
-const FORK_BOW = 9
-
-function BranchMapStrip({ view, t }: { readonly view: ResearchWorktreeView; readonly t: ResearchT }) {
-  const map = layoutWorktreeMap(view)
-  if (map.nodes.length === 0) return null
+function WorktreeGraphStrip({ view, t }: { readonly view: ResearchWorktreeView; readonly t: ResearchT }) {
+  const graph = layoutWorktreeGraph(view)
+  if (graph.lanes.length === 0) return null
   return (
-    <div className={css.worktreeStory} role="img" aria-label={t('worktree.map')}>
-      <svg viewBox={`0 0 ${String(map.width)} ${String(map.height)}`} preserveAspectRatio="none">
-        {map.forks.map(fork => (
-          <path
-            key={`fork-${fork.parentLineId}-${fork.childLineId}`}
-            className={css.worktreeMapFork}
-            d={`M ${String(fork.x)} ${String(fork.y1)} Q ${String(fork.x + FORK_BOW)} ${String((fork.y1 + fork.y2) / 2)}, ${String(fork.x)} ${String(fork.y2)}`}
-          >
-            <title>{`${fork.childLineId} ← ${fork.parentLineId}`}</title>
-          </path>
-        ))}
-        {map.epochs.map(epoch => (
+    <div className={css.worktreeGraphBox} role="img" aria-label={t('worktree.graph')}>
+      <svg viewBox={`0 0 ${String(graph.width)} ${String(graph.height)}`} preserveAspectRatio="xMidYMin meet">
+        {graph.epochs.map(epoch => (
           <line
             key={`epoch-${epoch.label}-${epoch.at}`}
-            x1={epoch.x} x2={epoch.x} y1={2} y2={map.height - 2}
-            className={css.worktreeStoryEpoch}
+            x1={0} x2={graph.width} y1={epoch.y} y2={epoch.y}
+            className={css.worktreeGraphEpoch}
           >
             <title>{`${epoch.label} · ${epoch.at.slice(0, 10)}`}</title>
           </line>
         ))}
-        <line
-          x1={map.nowX} x2={map.nowX} y1={2} y2={map.height - 2}
-          className={css.worktreeStoryNow}
-        />
-        {map.nodes.map(node => {
-          const endIso = node.lane.status === 'failed' && node.lane.closedAt !== null
-            ? node.lane.closedAt
-            : node.lane.lastSeen
+        {graph.forks.map(fork => (
+          <path
+            key={`fork-${fork.parentLineId}-${fork.childLineId}`}
+            className={css.worktreeGraphFork}
+            stroke={fork.color}
+            d={`M ${String(fork.x1)} ${String(fork.y - 10)} C ${String(fork.x1)} ${String(fork.y - 1)}, ${String(fork.x2)} ${String(fork.y - 10)}, ${String(fork.x2)} ${String(fork.y)}`}
+          >
+            <title>{`${fork.childLineId} ← ${fork.parentLineId}`}</title>
+          </path>
+        ))}
+        {graph.merges.map(merge => (
+          <path
+            key={`merge-${merge.childLineId}-${merge.parentLineId}`}
+            className={css.worktreeGraphMerge}
+            stroke={merge.color}
+            d={`M ${String(merge.x1)} ${String(merge.y - 7)} C ${String(merge.x1)} ${String(merge.y + 4)}, ${String(merge.x2)} ${String(merge.y - 8)}, ${String(merge.x2)} ${String(merge.y - 1)}`}
+          >
+            <title>{`${merge.childLineId} → ${merge.parentLineId} (merged)`}</title>
+          </path>
+        ))}
+        {graph.lanes.map(entry => (
+          <line
+            key={`lane-${entry.lane.lineId}`}
+            x1={entry.x} x2={entry.x} y1={entry.y1} y2={entry.y2}
+            className={
+              entry.lane.status === 'failed' ? css.worktreeGraphLaneDead
+                : entry.lane.status === 'adopted' ? css.worktreeGraphLaneAdopted
+                  : entry.isMain ? css.worktreeGraphLaneMain
+                    : css.worktreeGraphLane
+            }
+            stroke={entry.color}
+          >
+            <title>{`${entry.lane.label} · ${entry.lane.firstSeen.slice(0, 10)} → ${(entry.lane.closedAt ?? entry.lane.lastSeen).slice(0, 10)}`}</title>
+          </line>
+        ))}
+        {graph.beads.map(bead => {
+          const key = `bead-${bead.lineId}-${bead.at}-${String(bead.count)}`
           return (
-            <g key={`lane-${node.lane.lineId}`}>
-              <line
-                x1={node.x1} x2={node.x2} y1={node.y} y2={node.y}
-                className={
-                  node.isMain ? css.worktreeStoryMain
-                    : node.lane.status === 'failed' ? css.worktreeStoryDead
-                      : node.lane.status === 'adopted' ? css.worktreeStoryMerged
-                        : css.worktreeStoryOpen
-                }
+            <g key={key}>
+              <circle
+                cx={bead.x} cy={bead.y} r={beadRadius(bead.kind, bead.count)}
+                className={bead.kind === 'terminal' ? css.worktreeGraphBeadTerminal : css.worktreeGraphBead}
+                fill={bead.color}
               >
-                <title>{`${node.lane.label} · ${node.lane.firstSeen.slice(0, 10)} → ${endIso.slice(0, 10)}`}</title>
-              </line>
-              <text x={node.x2 + 3} y={node.y + 3} className={css.worktreeStoryGlyph}>
-                {node.isMain ? '●' : node.lane.status === 'failed' ? '✗' : node.lane.status === 'adopted' ? '✓' : '⌥'}
-              </text>
+                <title>{`${bead.lineId} · ${bead.kind} × ${String(bead.count)} · ${bead.at.slice(0, 16).replace('T', ' ')}`}</title>
+              </circle>
+              {bead.kind === 'terminal' && (
+                <text
+                  x={bead.x} y={bead.y + 2.2} textAnchor="middle"
+                  className={css.worktreeGraphBeadGlyph}
+                >
+                  {terminalGlyph(view, bead.lineId)}
+                </text>
+              )}
             </g>
           )
         })}
-        {map.hiddenCount > 0 && (
+        <line
+          x1={0} x2={graph.width} y1={graph.nowY} y2={graph.nowY}
+          className={css.worktreeGraphNow}
+        >
+          <title>{view.derivedAt.slice(0, 16).replace('T', ' ')}</title>
+        </line>
+        {graph.lanes.map(entry => (
           <text
-            x={map.width - 6} y={map.height - 2}
-            textAnchor="end" className={css.worktreeMapOverflow}
+            key={`label-${entry.lane.lineId}`}
+            x={graph.width - 6} y={entry.y2 + 3} textAnchor="end"
+            className={
+              entry.lane.status === 'failed' ? css.worktreeGraphLabelDead
+                : entry.isMain ? css.worktreeGraphLabelMain
+                  : css.worktreeGraphLabel
+            }
+            fill={entry.color}
           >
-            {t('worktree.map.overflow', { count: String(map.hiddenCount) })}
+            {gutterLabel(entry.lane.label)}
           </text>
-        )}
+        ))}
       </svg>
+      <p className={css.worktreeGraphNote}>
+        {t('worktree.graph.note')}
+        {graph.momentCount > graph.rows
+          ? ` · ${t('worktree.graph.compressed', { moments: String(graph.momentCount), rows: String(graph.rows) })}`
+          : ''}
+      </p>
     </div>
   )
+}
+
+/** The lane's terminal glyph on the bead (✗ a documented No, ✓ a merge, ● still walking). */
+function terminalGlyph(view: ResearchWorktreeView, lineId: string): string {
+  const lane = view.lanes.find(entry => entry.lineId === lineId)
+  return lane?.status === 'failed' ? '✗' : lane?.status === 'adopted' ? '✓' : '●'
 }
 
 /** One lane row: the glyph, the label, the E0 numbers, and the declared structure. */
@@ -356,8 +400,8 @@ export function WorktreeView({
                 </>
               )}
           </div>
-          {/* The branch map: lifelines + declared forks + epochs + now. */}
-          <BranchMapStrip view={view} t={t} />
+          {/* The branch graph: vertical lanes + forks + merge-backs + beads. */}
+          <WorktreeGraphStrip view={view} t={t} />
 
           {lanes.length === 0 && <p className={css.hint}>{t('worktree.empty')}</p>}
           {groups.map(group => group.lanes.length === 0 ? null : (

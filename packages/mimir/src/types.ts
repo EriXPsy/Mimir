@@ -943,6 +943,15 @@ export type ResearchAddJournalEntryResult = ResearchResult<{ readonly event: Eve
 /** Lane lifecycle as the worktree renders it (idea records are the state). */
 export type ResearchWorktreeLaneStatus = 'open' | 'failed' | 'adopted'
 
+/** How one touch reads on the branch graph's bead scale. */
+export type ResearchWorktreeTouchKind = 'create' | 'work' | 'meta' | 'terminal'
+
+/** One work node on a lane: a timestamp plus its bead class. */
+export interface ResearchWorktreeTouchView {
+  readonly at: string
+  readonly kind: ResearchWorktreeTouchKind
+}
+
 /**
  * One lane of the research worktree, label-resolved for the view: a research
  * line (idea, or `project:<id>`) wearing branch semantics — status, declared
@@ -971,6 +980,8 @@ export interface ResearchWorktreeLaneView {
   readonly gutDays: number | null
   /** Open lanes: days since the lane's last touch to the derivation time. */
   readonly idleDays: number | null
+  /** The lane's work nodes (timestamped touches), ts ascending — the beads. */
+  readonly touches: readonly ResearchWorktreeTouchView[]
 }
 
 /** One mainline declaration (one ref move), label-resolved. */

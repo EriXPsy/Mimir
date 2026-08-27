@@ -30,7 +30,7 @@
  * @module dsh-mimir/src/worktree
  */
 
-import { deriveLines } from './cognitive-map.ts'
+import { deriveLines, CREATION_ACTIONS, LINE_WEIGHTS } from './cognitive-map.ts'
 import type { CbeLineState, CbeWikiSnapshot } from './cognitive-map.ts'
 import type { EventRecord } from './types.ts'
 
@@ -49,6 +49,33 @@ export const IDEA_CLOSE_REASON_MAX_CHARS = 48
 
 /** Lifecycle of one lane as the worktree renders it. */
 export type CbeWorktreeLaneStatus = 'open' | 'failed' | 'adopted'
+
+/** How one touch reads on the branch graph's bead scale. */
+export type CbeWorktreeTouchKind = 'create' | 'work' | 'meta' | 'terminal'
+
+/** One work node on a lane: a timestamp plus its bead class. */
+export interface CbeWorktreeTouch {
+  readonly at: string
+  readonly kind: CbeWorktreeTouchKind
+}
+
+/**
+ * Classify one event into a bead kind for the branch graph: terminals
+ * (decided outcomes) are the largest beads, creations (eureka-class
+ * actions) next, weighted work mid, and zero-weight touches (journal
+ * lines, meta events) the smallest — attention, still on the record.
+ * Mirrors weightIsOutcomeTerminal's claim logic locally (not exported).
+ */
+function touchKindOf(event: EventRecord): CbeWorktreeTouchKind {
+  if (event.action === 'knowledge.idea.failed' || event.action === 'knowledge.idea.adopted') return 'terminal'
+  if (event.action === 'knowledge.claim.set') {
+    const status = typeof event.payload.status === 'string' ? event.payload.status : ''
+    if (status === 'supported' || status === 'invalidated') return 'terminal'
+  }
+  if (CREATION_ACTIONS.has(event.action)) return 'create'
+  if ((LINE_WEIGHTS[event.action] ?? 0) !== 0) return 'work'
+  return 'meta'
+}
 
 /** One lane of the worktree: a research line wearing branch semantics. */
 export interface CbeWorktreeLane {
@@ -73,6 +100,8 @@ export interface CbeWorktreeLane {
   readonly gutDays: number | null
   /** Open lanes: days since the lane's last touch to `now`. */
   readonly idleDays: number | null
+  /** The lane's work nodes (timestamped touches), ts ascending — the beads. */
+  readonly touches: readonly CbeWorktreeTouch[]
 }
 
 /** One mainline declaration (one ref move in the reflog). */
@@ -214,6 +243,14 @@ export function deriveWorktree(
     const idleDays = status === 'open' && lastMs !== null
       ? r3(Math.max(0, (nowMs - lastMs) / MS_PER_DAY))
       : null
+    const touches: CbeWorktreeTouch[] = []
+    for (const event of ordered) {
+      const eventLine = event.refs.ideaId !== undefined
+        ? event.refs.ideaId
+        : event.refs.projectId !== undefined ? `project:${event.refs.projectId}` : null
+      if (eventLine !== line.id) continue
+      touches.push(Object.freeze({ at: event.ts, kind: touchKindOf(event) }))
+    }
     lanes.push(Object.freeze({
       lineId: line.id,
       label: line.label,
@@ -228,6 +265,7 @@ export function deriveWorktree(
       closeReason: ideaById.get(line.id)?.failureReason ?? null,
       gutDays,
       idleDays,
+      touches: Object.freeze(touches),
     }))
   }
 
@@ -249,6 +287,7 @@ export function deriveWorktree(
       closeReason: idea.failureReason ?? null,
       gutDays: null,
       idleDays: status === 'open' ? r3(Math.max(0, (nowMs - (tsToMs(idea.createdAt) ?? nowMs)) / MS_PER_DAY)) : null,
+      touches: Object.freeze([]),
     }))
   }
 
