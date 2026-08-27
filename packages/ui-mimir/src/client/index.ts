@@ -315,6 +315,8 @@ function panelApply(ctx: ClientContext): void {
         controller.reorderPaperSubsections(projectId, moves, baseOutline),
       loadLedger: filter => { controller.loadLedger(filter) },
       generateReport: options => controller.generateReport(options),
+      generateBrief: options => controller.generateBrief(options),
+      addJournal: (text, projectId) => controller.addJournal(text, projectId),
       exportWiki: () => controller.exportWiki(),
       importWiki: (snapshot, mode, confirmReplace) => controller.importWiki(snapshot, mode, confirmReplace),
       dismissToast: (id) => { controller.dismissToast(id) },

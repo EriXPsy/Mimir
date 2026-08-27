@@ -12,10 +12,12 @@ import {
   CBE_LINE_EVIDENCE_CAP,
   deriveBrief,
   deriveLines,
+  deriveNarrative,
   deriveOpenLoops,
   deriveQuestions,
   deriveTransitions,
   detectMoments,
+  JOURNAL_ACTION,
   lineInferenceCard,
   renderBriefMarkdown,
   signedWeight,
@@ -304,6 +306,7 @@ describe('deriveBrief + renderBriefMarkdown (composed roadbook)', () => {
     expect(markdown).toContain('## Moments (eureka candidates)')
     expect(markdown).toContain('## Transitions (the Yes that emerged)')
     expect(markdown).toContain('## Open loops')
+    expect(markdown).toContain('## Your words (the L2 layer)')
     expect(markdown).toContain('## Boundary questions')
     expect(markdown).toContain('idea-a')
     expect(markdown).toContain('idea-b')
@@ -326,5 +329,52 @@ describe('lineInferenceCard (L1 epistemic schema)', () => {
     expect(card.evidencePaths).toEqual(alpha?.evidence)
     expect(card.boundaries.mustNotClaim.join(' ')).toContain('only about the work')
     expect(card.id).toContain('idea-a')
+  })
+})
+
+describe('deriveNarrative (the L2 layer)', () => {
+  it('collects only non-blank journal texts, in time order, with their scopes', () => {
+    const stream = [
+      ev('2026-08-26T13:00:00Z', JOURNAL_ACTION, { projectId: 'p1' }, {}),
+      ev('2026-08-26T12:00:00Z', JOURNAL_ACTION, { projectId: 'p1' }, { text: '   ' }),
+      ev('2026-08-26T10:00:00Z', JOURNAL_ACTION, { projectId: 'p1' }, { text: '先把检索丢掉试试' }),
+      ev('2026-08-26T11:00:00Z', JOURNAL_ACTION, { ideaId: 'idea-c' }, { text: '这条线值得再推一周' }),
+    ]
+    const narrative = deriveNarrative(stream)
+    expect(narrative).toHaveLength(2)
+    expect(narrative[0]).toMatchObject({ lineId: null, projectId: 'p1', text: '先把检索丢掉试试' })
+    expect(narrative[1]).toMatchObject({ lineId: 'idea-c', projectId: null, text: '这条线值得再推一周' })
+    expect(narrative.map(entry => entry.text)).toEqual(['先把检索丢掉试试', '这条线值得再推一周'])
+  })
+
+  it('never moves a line: a journal event leaves ids and drift untouched', () => {
+    const before = deriveLines(ALL, WIKI, WINDOW, NOW)
+    const withJournal = [
+      ...ALL,
+      ev('2026-08-26T10:00:00Z', JOURNAL_ACTION, { projectId: 'p1' }, { text: 'L2 永远不算证据' }),
+    ]
+    const after = deriveLines(withJournal, WIKI, WINDOW, NOW)
+    expect(after.map(line => line.id)).toEqual(before.map(line => line.id))
+    for (const line of before) {
+      const moved = after.find(candidate => candidate.id === line.id)
+      expect(moved?.drift).toBeCloseTo(line.drift, 3)
+    }
+  })
+
+  it('feeds the brief: one journal line lands in the narrative and the Markdown', () => {
+    const withJournal = [
+      ...ALL,
+      ev('2026-08-26T10:00:00Z', JOURNAL_ACTION, { projectId: 'p1' }, { text: '这条线起来了' }),
+    ]
+    const brief = deriveBrief(withJournal, WIKI, WINDOW, NOW)
+    expect(brief.narrative).toHaveLength(1)
+    const markdown = renderBriefMarkdown(brief)
+    expect(markdown).toContain('## Your words (the L2 layer)')
+    expect(markdown).toContain('这条线起来了')
+  })
+
+  it('renders the empty state when no words are written', () => {
+    const markdown = renderBriefMarkdown(deriveBrief(ALL, WIKI, WINDOW, NOW))
+    expect(markdown).toContain('_No words yet — the map is yours to write on._')
   })
 })

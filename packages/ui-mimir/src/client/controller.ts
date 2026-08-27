@@ -31,6 +31,7 @@ import type {
   PaperSnapshotView,
   ResearchArtifactResult,
   ResearchArxivSubscriptionsResult,
+  ResearchAddJournalEntryResult,
   ResearchBackupStatusView,
   ResearchBibliographyResult,
   ResearchCheckArxivSubscriptionsResult,
@@ -51,6 +52,8 @@ import type {
   ResearchFailure,
   ResearchFetchPaperPdfResult,
   ResearchFiguresResult,
+  ResearchGenerateBriefOptions,
+  ResearchGenerateBriefResult,
   ResearchImportBibResult,
   ResearchImportPaperResult,
   ResearchImportWikiMode,
@@ -111,7 +114,7 @@ import type {
 } from 'dsh-mimir/types'
 
 /**
- * The fifty-eight Remote calls this controller needs, exactly as the
+ * The sixty-three Remote calls this controller needs, exactly as the
  * generated `research` namespace types them. The ledger remotes keep
  * `actorKind`/`order` as widened `string` (the generated face elides the
  * literal unions across the boundary).
@@ -279,6 +282,16 @@ export interface ResearchRemote {
     since?: string | undefined
     until?: string | undefined
   }) => Promise<RemoteResult<ResearchProgressReportResult>>
+  generateBrief: (request: {
+    projectId?: string | undefined
+    since?: string | undefined
+    until?: string | undefined
+  }) => Promise<RemoteResult<ResearchGenerateBriefResult>>
+  addJournalEntry: (request: {
+    text: string
+    projectId?: string | undefined
+    ideaId?: string | undefined
+  }) => Promise<RemoteResult<ResearchAddJournalEntryResult>>
 }
 
 /** Quiet period after the last keystroke before the draft autosaves. */
@@ -464,6 +477,15 @@ export interface ResearchReportView {
   readonly failure: ResearchFailureView | null
 }
 
+/** The last cognitive brief the ledger view generated (null fields while none). */
+export interface ResearchBriefView {
+  readonly status: 'idle' | 'loading' | 'ready' | 'error'
+  readonly markdown: string
+  readonly generatedAt: string | null
+  readonly eventCount: number | null
+  readonly failure: ResearchFailureView | null
+}
+
 /** The selected project's `references.bib` view, edited entry-wise through the panel. */
 export interface ResearchBibView {
   readonly projectId: string
@@ -532,6 +554,8 @@ export interface ResearchView {
   readonly ledger: ResearchLedgerView
   /** The ledger view's progress report; `idle` before the first generation. */
   readonly report: ResearchReportView
+  /** The ledger view's cognitive brief (CBE roadbook); `idle` before the first generation. */
+  readonly brief: ResearchBriefView
   /** The corner toast queue (oldest first); the host component sweeps expiries. */
   readonly toasts: readonly ResearchToast[]
   /** Scheduled-backup status for the overview; null until loaded (or on failure). */
@@ -573,6 +597,7 @@ const INITIAL_VIEW: ResearchView = Object.freeze({
   venueTemplates: Object.freeze({ status: 'cold', list: Object.freeze([]), failure: null }),
   ledger: Object.freeze({ status: 'cold', list: Object.freeze([]), failure: null }),
   report: Object.freeze({ status: 'idle', markdown: '', generatedAt: null, eventCount: null, failure: null }),
+  brief: Object.freeze({ status: 'idle', markdown: '', generatedAt: null, eventCount: null, failure: null }),
   toasts: Object.freeze([]),
   backup: null,
   paperJump: null,
@@ -619,6 +644,7 @@ export class ResearchController implements HostObservable<ResearchView> {
   private snapshotDetailGeneration = 0
   private ledgerGeneration = 0
   private reportGeneration = 0
+  private briefGeneration = 0
   private figuresInFlight = false
   private meetingsGeneration = 0
   private meetingsInFlight = false
@@ -851,6 +877,78 @@ export class ResearchController implements HostObservable<ResearchView> {
         this.publish({ report: Object.freeze({ ...this.view.report, status: 'error', failure }) })
       }
       return failure
+    }
+  }
+
+  /**
+   * Generate the cognitive brief (CBE roadbook) of one window (the brief
+   * card's button): the same publish/supersede contract as
+   * {@link generateReport}. A success toasts once.
+   * @param options - the window/scope options the view assembled.
+   * @returns null on success, the settled failure view otherwise.
+   */
+  async generateBrief(options: ResearchGenerateBriefOptions): Promise<ResearchFailureView | null> {
+    this.briefGeneration += 1
+    const generation = this.briefGeneration
+    this.publish({
+      brief: Object.freeze({ status: 'loading', markdown: '', generatedAt: null, eventCount: null, failure: null }),
+    })
+    try {
+      const carried = await this.remote.generateBrief({ ...options })
+      if (this.disposed || generation !== this.briefGeneration) return null
+      if (!carried.ok) {
+        const failure = failureOf(carried.error.code, carried.error.message)
+        this.publish({ brief: Object.freeze({ ...this.view.brief, status: 'error', failure }) })
+        return failure
+      }
+      const result = carried.value
+      if (!result.ok) {
+        const failure = businessFailure(result.error)
+        this.publish({ brief: Object.freeze({ ...this.view.brief, status: 'error', failure }) })
+        return failure
+      }
+      this.publish({
+        brief: Object.freeze({
+          status: 'ready',
+          markdown: result.value.markdown,
+          generatedAt: result.value.generatedAt,
+          eventCount: result.value.eventCount,
+          failure: null,
+        }),
+      })
+      this.notify('success', 'brief.ready')
+      return null
+    } catch (error) {
+      const failure = transportFailure(error)
+      if (!this.disposed && generation === this.briefGeneration) {
+        this.publish({ brief: Object.freeze({ ...this.view.brief, status: 'error', failure }) })
+      }
+      return failure
+    }
+  }
+
+  /**
+   * Write one L2 journal line (the journal box's submit): the text plus the
+   * project scope the view assembled. A success toasts once and returns
+   * null; a failure returns the failure view WITHOUT a toast — the journal
+   * box surfaces it inline.
+   * @param text - the user's words (validated client-side, capped server-side).
+   * @param projectId - the project scope, or null for an unscoped entry.
+   * @returns null on success, the settled failure view otherwise.
+   */
+  async addJournal(text: string, projectId: string | null): Promise<ResearchFailureView | null> {
+    try {
+      const carried = await this.remote.addJournalEntry({
+        text,
+        ...(projectId === null ? {} : { projectId }),
+      })
+      if (!carried.ok) return failureOf(carried.error.code, carried.error.message)
+      const result = carried.value
+      if (!result.ok) return businessFailure(result.error)
+      this.notify('success', 'journal.added')
+      return null
+    } catch (error) {
+      return transportFailure(error)
     }
   }
 

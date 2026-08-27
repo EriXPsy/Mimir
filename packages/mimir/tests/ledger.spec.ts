@@ -26,6 +26,7 @@ import {
   newEvent,
   truncatePayload,
   EVENT_PAYLOAD_MAX_CHARS,
+  JOURNAL_TEXT_MAX_CHARS,
   LIST_EVENTS_MAX_LIMIT,
   PANEL_ACTOR,
   SERVICE_ACTOR,
@@ -417,6 +418,86 @@ describe('ResearchService ledger wiring (panel actor)', () => {
       .resolves.toMatchObject({ ok: false, error: { code: 'invalid-input' } })
     const ok = await service.listEvents({})
     expect(ok).toEqual({ ok: true, value: { events: [] } })
+  })
+})
+
+describe('cognitive beidou remotes (CBE service wiring)', () => {
+  it('addJournalEntry appends the L2 event with panel actor and queryable refs', async () => {
+    const { domain, service } = await serviceHarness()
+    await domain.table('projects').put(PROJECT.id, PROJECT)
+    const outcome = await service.addJournalEntry({ text: '这条线要再想想', projectId: PROJECT.id })
+    expect(outcome.ok).toBe(true)
+    if (!outcome.ok) throw new Error('unreachable')
+    expect(outcome.value.event).toMatchObject({
+      action: 'journal.entry.added',
+      actor: { kind: 'user', id: 'panel' },
+      refs: { projectId: PROJECT.id },
+      payload: { text: '这条线要再想想' },
+    })
+    const events = await listEvents(domain, { actionPrefix: 'journal.' })
+    expect(events).toHaveLength(1)
+    expect(events[0]?.id).toBe(outcome.value.event.id)
+  })
+
+  it('addJournalEntry rejects blank text, over-cap text, and unknown projects', async () => {
+    const { service } = await serviceHarness()
+    await expect(service.addJournalEntry({ text: '   ', projectId: 'p1' }))
+      .resolves.toMatchObject({ ok: false, error: { code: 'invalid-input', message: 'journal text must not be empty' } })
+    await expect(service.addJournalEntry({ text: 'x'.repeat(JOURNAL_TEXT_MAX_CHARS + 1) }))
+      .resolves.toMatchObject({ ok: false, error: { code: 'invalid-input' } })
+    await expect(service.addJournalEntry({ text: 'valid text', projectId: 'ghost' }))
+      .resolves.toMatchObject({ ok: false, error: { code: 'project-not-found' } })
+  })
+
+  it('generateBrief composes the roadbook: dominant line, L2 words, event count', async () => {
+    const { domain, service } = await serviceHarness()
+    await domain.table('projects').put(PROJECT.id, PROJECT)
+    await domain.table('ideas').put('i1', {
+      id: 'i1',
+      title: 'Retrieval-free decoding',
+      hypothesis: 'It works without retrieval.',
+      status: 'active',
+      createdAt: new Date(Date.now() - 30 * 86_400_000).toISOString(),
+    })
+    const now = Date.now()
+    await appendEvent(domain, {
+      actor: WIKI_AGENT_ACTOR,
+      action: 'knowledge.idea.added',
+      refs: { ideaId: 'i1', projectId: PROJECT.id },
+      payload: { title: 'Retrieval-free decoding' },
+      now: new Date(now - 3_600_000),
+    })
+    await appendEvent(domain, {
+      actor: WIKI_AGENT_ACTOR,
+      action: 'experiments.saved',
+      refs: { ideaId: 'i1', projectId: PROJECT.id },
+      payload: { name: 'rfd-run-1', created: true },
+      now: new Date(now - 1_800_000),
+    })
+    await appendEvent(domain, {
+      actor: WIKI_AGENT_ACTOR,
+      action: 'literature.paper.imported',
+      refs: { ideaId: 'i1', projectId: PROJECT.id },
+      payload: { title: 'Retrieval-free related work', imported: true },
+      now: new Date(now - 600_000),
+    })
+    await service.addJournalEntry({ text: '这条线起来了', projectId: PROJECT.id, ideaId: 'i1' })
+    const brief = await service.generateBrief({
+      projectId: PROJECT.id,
+      since: new Date(now - 2 * 86_400_000).toISOString(),
+    })
+    expect(brief.ok).toBe(true)
+    if (!brief.ok) throw new Error('unreachable')
+    expect(brief.value.markdown).toContain('| `i1` Retrieval-free decoding | dominant')
+    expect(brief.value.markdown).toContain('## Your words (the L2 layer)')
+    expect(brief.value.markdown).toContain('这条线起来了')
+    expect(brief.value.eventCount).toBe(4)
+  })
+
+  it('generateBrief rejects an unknown project id', async () => {
+    const { service } = await serviceHarness()
+    await expect(service.generateBrief({ projectId: 'ghost' }))
+      .resolves.toMatchObject({ ok: false, error: { code: 'project-not-found' } })
   })
 })
 

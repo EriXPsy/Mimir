@@ -3857,6 +3857,79 @@ li.dropIndicator {
   font-weight: 600;
 }
 
+/* The L2 journal box: a dashed enclosure under the brief's sheet — the one
+   place the user writes their own words onto the map. */
+.journalBox {
+  margin-top: 14px;
+  padding: 12px 14px;
+  border: 1px dashed var(--mimir-line);
+  border-radius: 10px;
+}
+
+.journalHead {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.journalScope {
+  color: var(--dsw-alias-label-tertiary, #857d6c);
+  font-family: var(--mimir-mono);
+  font-size: 10.5px;
+  letter-spacing: 0.02em;
+}
+
+.journalInput {
+  display: block;
+  width: 100%;
+  margin-top: 8px;
+  padding: 8px 10px;
+  border: 1px solid var(--mimir-line);
+  border-radius: 8px;
+  background: var(--mimir-sheet);
+  color: var(--dsw-alias-label-primary, #211e19);
+  font-family: var(--mimir-serif);
+  font-size: 13.5px;
+  line-height: 1.6;
+  outline: none;
+  resize: vertical;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.journalInput::placeholder {
+  color: var(--dsw-alias-label-tertiary, #9aa2b1);
+}
+
+.journalInput:focus {
+  border-color: var(--dsw-alias-state-business-primary, #4176e6);
+  box-shadow: 0 0 0 3px var(--dsw-alias-state-business-tertiary, rgb(65 118 230 / 15%));
+}
+
+.journalFoot {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: 8px;
+}
+
+.journalCount {
+  margin-right: auto;
+  color: var(--dsw-alias-label-tertiary, #857d6c);
+  font-family: var(--mimir-mono);
+  font-size: 10.5px;
+  font-variant-numeric: tabular-nums;
+}
+
+.journalCount[data-over] {
+  color: var(--dsw-alias-state-danger, #c2413a);
+}
+
+.journalOver {
+  color: var(--dsw-alias-state-danger, #c2413a);
+  font-size: 11px;
+}
+
 /* The timeline: one hairline-separated row per event — microtext timestamp,
    a flat square node, the action stamp, the actor microtext, the payload line. */
 .timelineCard {

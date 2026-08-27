@@ -1,21 +1,23 @@
 /**
  * The ledger (growth record) view — the workbench's seventh tab: the
  * transparent record of the research process, rendered as an archive-style
- * timeline (time window × project scope, newest first) above the one-click
- * progress report (generated from the same window, shown as a printed sheet,
- * downloadable as Markdown). All reads flow through the controller's ledger
- * slice; this component owns only the window/scope selection and the
- * report's download/copy actions.
+ * timeline (time window × project scope, newest first) above two printed
+ * sheets of the same window — the one-click progress report and the
+ * cognitive brief (the DDM-lite roadbook with the user's L2 journal box
+ * beneath it). All reads flow through the controller's ledger slice; these
+ * components own only the window/scope selection and the download/copy
+ * actions.
  * @module dsh-client-ui-mimir/client/LedgerView
  */
 
 import { useEffect, useState } from 'react'
-import type { EventRecord, ResearchEventFilter, ResearchProgressReportOptions } from 'dsh-mimir/types'
-import type { ResearchFailureView, ResearchLedgerView, ResearchReportView } from './controller.ts'
+import type { EventRecord, ResearchEventFilter, ResearchGenerateBriefOptions, ResearchProgressReportOptions } from 'dsh-mimir/types'
+import type { ResearchBriefView, ResearchFailureView, ResearchLedgerView, ResearchReportView } from './controller.ts'
 import type { ResearchKey } from './locales.ts'
 import type { ResearchT } from './view-common.ts'
 import { renderMarkdown } from './MarkdownView.tsx'
 import { ViewHead } from './ViewHead.tsx'
+import { CognitiveBriefView } from './CognitiveBriefView.tsx'
 import {
   ACTOR_KEYS, LEDGER_LIST_LIMIT, LEDGER_WINDOWS,
   ledgerIsDestructive, ledgerPayloadLine, ledgerTimeParts, ledgerWindowFilter,
@@ -63,18 +65,21 @@ function LedgerRow({ event, t }: {
 }
 
 /**
- * @param props - the ledger slice, the report slice, the project scope input,
- * the controller verbs, and copy.
+ * @param props - the ledger slice, the report slice, the brief slice, the
+ * project scope input, the controller verbs, and copy.
  * @returns the ledger view.
  */
 export function LedgerView({
-  ledger, report, selectedProjectId, loadLedger, generateReport, t,
+  ledger, report, brief, selectedProjectId, loadLedger, generateReport, generateBrief, addJournal, t,
 }: {
   readonly ledger: ResearchLedgerView
   readonly report: ResearchReportView
+  readonly brief: ResearchBriefView
   readonly selectedProjectId: string | null
   readonly loadLedger: (filter: ResearchEventFilter) => void
   readonly generateReport: (options: ResearchProgressReportOptions) => Promise<ResearchFailureView | null>
+  readonly generateBrief: (options: ResearchGenerateBriefOptions) => Promise<ResearchFailureView | null>
+  readonly addJournal: (text: string, projectId: string | null) => Promise<ResearchFailureView | null>
   readonly t: ResearchT
 }) {
   // Named ledgerWindow (not `window`): the global window (timers, clipboard)
@@ -222,6 +227,17 @@ export function LedgerView({
           </div>
         )}
       </section>
+
+      {/* The cognitive brief (CBE roadbook) + the L2 journal box. */}
+      <CognitiveBriefView
+        brief={brief}
+        briefWindow={ledgerWindow}
+        scopedProjectId={scopedProjectId}
+        generateBrief={generateBrief}
+        addJournal={addJournal}
+        refreshLedger={refresh}
+        t={t}
+      />
 
       {/* The timeline of the selected window, newest first. */}
       <section className={css.timelineCard}>

@@ -890,3 +890,26 @@ export type ResearchProgressReportResult = ResearchResult<{
   readonly generatedAt: string
   readonly eventCount: number
 }>
+
+/**
+ * `generateBrief` options: a project filter plus ISO-8601 bounds (`since`
+ * inclusive, `until` exclusive), the same window contract as the progress
+ * report — the cognitive brief reads the window's DDM-lite map plus the
+ * user's L2 journal lines.
+ */
+export interface ResearchGenerateBriefOptions {
+  readonly projectId?: string | undefined
+  readonly since?: string | undefined
+  readonly until?: string | undefined
+}
+
+/** `generateBrief` result: the rendered cognitive-brief Markdown. */
+export type ResearchGenerateBriefResult = ResearchResult<{
+  readonly markdown: string
+  readonly generatedAt: string
+  readonly eventCount: number
+}>
+
+/** `addJournalEntry` result: the stored journal event (the L2 write). */
+export type ResearchAddJournalEntryResult = ResearchResult<{ readonly event: EventRecord }>
+

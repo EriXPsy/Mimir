@@ -55,7 +55,9 @@ const MS_PER_DAY = 86_400_000
  * vocabulary (all 24 decision-grade actions). Outcomes that sign by payload
  * (`compute.job.settled`, `knowledge.claim.set`) resolve in
  * {@link signedWeight}. Actions absent here weigh 0 (meta events like
- * `data.wiki.*` never move a line).
+ * `data.wiki.*` never move a line — and neither does the journal: `journal.*`
+ * is the L2 layer, read by the map as the user's own words, never signed as
+ * evidence).
  */
 export const LINE_WEIGHTS: Readonly<Record<string, number>> = {
   'knowledge.idea.added': 2,
@@ -89,6 +91,12 @@ export const CREATION_ACTIONS: ReadonlySet<string> = new Set([
   'figures.saved',
   'writing.paper.reordered',
 ])
+
+/**
+ * The one L2 action: a user-written journal line. It is the ONLY write path
+ * the cognitive layer reads as narrative — never as evidence.
+ */
+export const JOURNAL_ACTION = 'journal.entry.added'
 
 /** The signed weight of one event on its line (outcome-aware). */
 export function signedWeight(event: EventRecord): number {
@@ -193,6 +201,21 @@ export interface CbeBoundaryQuestion {
   readonly evidence: readonly string[]
 }
 
+/**
+ * One user-written journal line (the L2 layer): narrative ONLY the user
+ * authored, read by the map for the brief but never weighed as evidence.
+ */
+export interface CbeNarrative {
+  readonly id: string
+  readonly ts: string
+  /** The user's own words, verbatim. */
+  readonly text: string
+  /** The line the entry was written against, or null when unscoped. */
+  readonly lineId: string | null
+  /** The project the entry was written under, or null when unscoped. */
+  readonly projectId: string | null
+}
+
 /** The composed brief model (the roadbook's data layer). */
 export interface CbeBrief {
   readonly window: CbeBriefWindow
@@ -201,6 +224,8 @@ export interface CbeBrief {
   readonly transitions: readonly CbeTransition[]
   readonly openLoops: readonly CbeOpenLoop[]
   readonly questions: readonly CbeBoundaryQuestion[]
+  /** The user's L2 journal lines of the stream, in time order. */
+  readonly narrative: readonly CbeNarrative[]
 }
 
 /** One L1 inference card (DeepScientist-borrowed epistemic schema). */
@@ -530,6 +555,33 @@ export function deriveQuestions(
   return Object.freeze(questions.slice(0, CBE_QUESTION_CAP))
 }
 
+/**
+ * Derive the L2 layer: the user's journal lines, in (ts, id) order. An entry
+ * counts only when its `payload.text` is a non-blank string; the line and
+ * project scopes ride the event's refs (`ideaId` maps to the line id).
+ * Journal events never enter {@link deriveLines} — L2 is read by the map,
+ * never signed as evidence.
+ * @param events - ledger events, any order.
+ * @returns the narrative entries, oldest first, frozen.
+ */
+export function deriveNarrative(events: readonly EventRecord[]): readonly CbeNarrative[] {
+  const entries = [...events]
+    .sort((a, b) => a.ts.localeCompare(b.ts) || a.id.localeCompare(b.id))
+    .filter(event => event.action === JOURNAL_ACTION)
+    .flatMap(event => {
+      const text = event.payload.text
+      if (typeof text !== 'string' || text.trim() === '') return []
+      return [Object.freeze({
+        id: event.id,
+        ts: event.ts,
+        text,
+        lineId: event.refs.ideaId ?? null,
+        projectId: event.refs.projectId ?? null,
+      })]
+    })
+  return Object.freeze(entries)
+}
+
 /** Compose the full brief model (the pure core of the roadbook). */
 export function deriveBrief(
   events: readonly EventRecord[],
@@ -545,6 +597,7 @@ export function deriveBrief(
     transitions: deriveTransitions(events),
     openLoops: deriveOpenLoops(events),
     questions: deriveQuestions(lines, wiki),
+    narrative: deriveNarrative(events),
   })
 }
 
@@ -650,6 +703,17 @@ export function renderBriefMarkdown(brief: CbeBrief): string {
   } else {
     for (const loop of brief.openLoops) {
       lines.push(`- ${loop.kind}: \`${loop.refId}\` since ${loop.openedAt}`)
+    }
+  }
+  lines.push('')
+  lines.push('## Your words (the L2 layer)')
+  lines.push('')
+  if (brief.narrative.length === 0) {
+    lines.push('_No words yet — the map is yours to write on._')
+  } else {
+    for (const entry of brief.narrative) {
+      const line = entry.lineId === null ? '' : `\`${entry.lineId}\` `
+      lines.push(`- ${entry.ts} ${line}> ${entry.text}`)
     }
   }
   lines.push('')

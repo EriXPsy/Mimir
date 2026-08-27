@@ -9,12 +9,21 @@
 
 import type { ResearchWikiDomain } from '../store.ts'
 import {
+  appendEvent,
   buildProgressReport,
+  JOURNAL_TEXT_MAX_CHARS,
   LIST_EVENTS_MAX_LIMIT,
   listEvents,
+  PANEL_ACTOR,
 } from '../ledger.ts'
+import { deriveBrief, JOURNAL_ACTION, renderBriefMarkdown } from '../cognitive-map.ts'
+import type { CbeBriefWindow, CbeWikiSnapshot } from '../cognitive-map.ts'
 import type {
+  EventRefs,
   LedgerActorKind,
+  ResearchAddJournalEntryResult,
+  ResearchGenerateBriefOptions,
+  ResearchGenerateBriefResult,
   ResearchListEventsResult,
   ResearchProgressReportOptions,
   ResearchProgressReportResult,
@@ -125,6 +134,120 @@ export async function generateProgressReportRemote(
     return rejected({
       code: 'invalid-input',
       message: error instanceof RangeError ? error.message : 'report options are invalid',
+    })
+  }
+}
+
+/**
+ * Render the COGNITIVE BRIEF (the DDM-lite roadbook) of one window: the
+ * lines' drift states, the eureka candidates, the status transitions, the
+ * open loops, the boundary questions — and, between the loops and the
+ * questions, the user's own L2 journal lines. Omitted bounds open into the
+ * full history (`since` = epoch, `until` = now); an unknown project id is
+ * `project-not-found`; an unparseable bound is `invalid-input`. The brief is
+ * a pure query — it writes nothing (the L2 write path is
+ * {@link addJournalEntryRemote}).
+ * @param deps - open wiki domain.
+ * @param request - the optional scope and bounds.
+ * @returns the Markdown brief plus the event count it covered.
+ */
+export async function generateBriefRemote(
+  deps: LedgerDeps,
+  request: {
+    projectId?: string | undefined
+    since?: string | undefined
+    until?: string | undefined
+  },
+): Promise<ResearchGenerateBriefResult> {
+  if (request.projectId !== undefined
+    && deps.domain.table('projects').get(request.projectId) === undefined) {
+    return rejected({ code: 'project-not-found', projectId: request.projectId })
+  }
+  const options: ResearchGenerateBriefOptions = {
+    ...(request.projectId === undefined ? {} : { projectId: request.projectId }),
+    ...(request.since === undefined ? {} : { since: request.since }),
+    ...(request.until === undefined ? {} : { until: request.until }),
+  }
+  const window: CbeBriefWindow = {
+    since: options.since ?? new Date(0).toISOString(),
+    until: options.until ?? new Date().toISOString(),
+    projectId: options.projectId ?? null,
+  }
+  try {
+    const events = await listEvents(deps.domain, {
+      ...(options.projectId === undefined ? {} : { projectId: options.projectId }),
+      ...(options.since === undefined ? {} : { since: options.since }),
+      ...(options.until === undefined ? {} : { until: options.until }),
+      limit: LIST_EVENTS_MAX_LIMIT,
+    })
+    const wiki: CbeWikiSnapshot = {
+      ideas: [...deps.domain.table('ideas').entries()].map(([, record]) => record),
+      claims: [...deps.domain.table('claims').entries()].map(([, record]) => record),
+      projects: [...deps.domain.table('projects').entries()].map(([, record]) => record),
+    }
+    const brief = deriveBrief(events, wiki, window, Date.now())
+    return success({
+      markdown: renderBriefMarkdown(brief),
+      generatedAt: new Date().toISOString(),
+      eventCount: events.length,
+    })
+  } catch (error) {
+    return rejected({
+      code: 'invalid-input',
+      message: error instanceof RangeError ? error.message : 'brief options are invalid',
+    })
+  }
+}
+
+/**
+ * Append one L2 journal entry (the user's own words) to the ledger: the only
+ * write path the cognitive map reads as narrative. The text must be a
+ * non-blank string capped at {@link JOURNAL_TEXT_MAX_CHARS} characters; a
+ * `projectId` scopes the entry (unknown id → `project-not-found`), an
+ * `ideaId` writes it against one line — both refs are omitted when absent.
+ * The stored event is the single source of truth: L2 is re-derived, never
+ * persisted as a table of its own.
+ * @param deps - open wiki domain.
+ * @param request - the text plus optional project/line refs.
+ * @returns the stored journal event.
+ */
+export async function addJournalEntryRemote(
+  deps: LedgerDeps,
+  request: {
+    text: string
+    projectId?: string | undefined
+    ideaId?: string | undefined
+  },
+): Promise<ResearchAddJournalEntryResult> {
+  if (typeof request.text !== 'string' || request.text.trim() === '') {
+    return rejected({ code: 'invalid-input', message: 'journal text must not be empty' })
+  }
+  if (request.text.length > JOURNAL_TEXT_MAX_CHARS) {
+    return rejected({
+      code: 'invalid-input',
+      message: `journal text is capped at ${JOURNAL_TEXT_MAX_CHARS} characters`,
+    })
+  }
+  if (request.projectId !== undefined
+    && deps.domain.table('projects').get(request.projectId) === undefined) {
+    return rejected({ code: 'project-not-found', projectId: request.projectId })
+  }
+  const refs: EventRefs = {
+    ...(request.projectId === undefined ? {} : { projectId: request.projectId }),
+    ...(request.ideaId === undefined ? {} : { ideaId: request.ideaId }),
+  }
+  try {
+    const event = await appendEvent(deps.domain, {
+      actor: PANEL_ACTOR,
+      action: JOURNAL_ACTION,
+      ...(Object.keys(refs).length === 0 ? {} : { refs }),
+      payload: { text: request.text },
+    })
+    return success({ event })
+  } catch (error) {
+    return rejected({
+      code: 'invalid-input',
+      message: error instanceof RangeError ? error.message : 'journal entry is invalid',
     })
   }
 }

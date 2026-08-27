@@ -20,8 +20,8 @@ import type {} from '@deepseek-ai/dsh-client-ui-sidebar/client'
 import type {} from './locales.ts'
 import type {
   ArxivEntry, BibEntry, ExperimentInput, FigureEntry, MeetingInclude, ResearchEventFilter,
-  ResearchImportWikiMode, ResearchProgressReportOptions, ResearchWikiSnapshot, SectionMove,
-  SectionOutlineTitles, ServerInput, SubsectionMove,
+  ResearchGenerateBriefOptions, ResearchImportWikiMode, ResearchProgressReportOptions,
+  ResearchWikiSnapshot, SectionMove, SectionOutlineTitles, ServerInput, SubsectionMove,
 } from 'dsh-mimir/types'
 import type { ResearchFailureView, ResearchImportCounts, ResearchView } from './controller.ts'
 import type { MetricChartRow } from './view-common.ts'
@@ -495,6 +495,21 @@ export interface ResearchPanelInjected {
    * @returns null on success, the settled failure view otherwise.
    */
   generateReport: (options: ResearchProgressReportOptions) => Promise<ResearchFailureView | null>
+  /**
+   * Generate the cognitive brief (CBE roadbook) of one window (the brief
+   * card's button): the DDM-lite map plus the user's L2 journal lines.
+   * @param options - the window/scope options the view assembled.
+   * @returns null on success, the settled failure view otherwise.
+   */
+  generateBrief: (options: ResearchGenerateBriefOptions) => Promise<ResearchFailureView | null>
+  /**
+   * Write one L2 journal line into the ledger (the journal box's submit) —
+   * the user's own words, read back by the brief, never weighed as evidence.
+   * @param text - the entry's text (non-blank, capped server-side).
+   * @param projectId - the project scope, or null for an unscoped entry.
+   * @returns null on success, the settled failure view otherwise.
+   */
+  addJournal: (text: string, projectId: string | null) => Promise<ResearchFailureView | null>
   /**
    * Export the whole wiki as one snapshot (the download button).
    * @returns the snapshot, or the settled failure view.

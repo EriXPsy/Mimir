@@ -20,6 +20,7 @@ import type {
   BibEntry,
   ExperimentInput,
   ResearchArtifactResult,
+  ResearchAddJournalEntryResult,
   ResearchArxivSubscriptionsResult,
   ResearchBibliographyResult,
   ResearchCheckArxivSubscriptionsResult,
@@ -36,6 +37,7 @@ import type {
   ResearchExportWikiResult,
   ResearchFetchPaperPdfResult,
   ResearchFiguresResult,
+  ResearchGenerateBriefResult,
   ResearchImportBibResult,
   ResearchImportPaperResult,
   ResearchImportWikiMode,
@@ -612,6 +614,24 @@ export class ResearchService extends TypertRemoteService {
     until?: string | undefined
   }): Promise<ResearchProgressReportResult> {
     return ledger.generateProgressReportRemote(this.deps, request)
+  }
+
+  @Remote('generateBrief')
+  generateBrief(request: {
+    projectId?: string | undefined
+    since?: string | undefined
+    until?: string | undefined
+  }): Promise<ResearchGenerateBriefResult> {
+    return ledger.generateBriefRemote(this.deps, request)
+  }
+
+  @Remote('addJournalEntry')
+  addJournalEntry(request: {
+    text: string
+    projectId?: string | undefined
+    ideaId?: string | undefined
+  }): Promise<ResearchAddJournalEntryResult> {
+    return ledger.addJournalEntryRemote(this.deps, request)
   }
 }
 

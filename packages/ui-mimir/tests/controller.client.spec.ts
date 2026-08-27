@@ -23,6 +23,8 @@ import type {
   ResearchExperimentsResult,
   ResearchFetchPaperPdfResult,
   ResearchFiguresResult,
+  ResearchGenerateBriefResult,
+  ResearchAddJournalEntryResult,
   ResearchImportBibResult,
   ResearchImportPaperResult,
   ResearchListEventsResult,
@@ -111,6 +113,8 @@ function stubRemote(overrides: Partial<ResearchRemote>): ResearchRemote {
     listBackups: missing('listBackups'),
     listEvents: missing('listEvents'),
     generateProgressReport: missing('generateProgressReport'),
+    generateBrief: missing('generateBrief'),
+    addJournalEntry: missing('addJournalEntry'),
     getImageGenConfig: missing('getImageGenConfig'),
     setImageGenConfig: missing('setImageGenConfig'),
     ...overrides,
@@ -1810,5 +1814,93 @@ describe('ResearchController ledger (growth record)', () => {
     const report = controller.getSnapshot().report
     expect(report.status).toBe('error')
     expect(report.failure?.code).toBe('project-not-found')
+  })
+})
+
+describe('ResearchController cognitive brief (CBE)', () => {
+  /** One stored journal event, as the service would return it. */
+  const JOURNAL_EVENT = {
+    id: 'ev-j1',
+    ts: '2026-08-27T06:00:00.000Z',
+    actor: { kind: 'user' as const, id: 'panel' },
+    action: 'journal.entry.added',
+    refs: { projectId: 'p1' },
+    payload: { text: '这一句算数' },
+  }
+
+  it('generateBrief publishes the brief slice and toasts the success', async () => {
+    const controller = new ResearchController(stubRemote({
+      generateBrief: () => Promise.resolve(carried<ResearchGenerateBriefResult>({
+        ok: true,
+        value: { markdown: '# Cognitive Brief', generatedAt: '2026-08-27T06:00:00.000Z', eventCount: 4 },
+      })),
+    }))
+    const failure = await controller.generateBrief({ projectId: 'p1' })
+    expect(failure).toBeNull()
+    expect(controller.getSnapshot().brief).toEqual({
+      status: 'ready',
+      markdown: '# Cognitive Brief',
+      generatedAt: '2026-08-27T06:00:00.000Z',
+      eventCount: 4,
+      failure: null,
+    })
+    expect(controller.getSnapshot().toasts).toHaveLength(1)
+    expect(controller.getSnapshot().toasts[0]?.copy).toBe('brief.ready')
+  })
+
+  it('generateBrief returns the failure view and freezes the slice on error', async () => {
+    const controller = new ResearchController(stubRemote({
+      generateBrief: () => Promise.resolve(carried<ResearchGenerateBriefResult>({
+        ok: false,
+        error: { code: 'project-not-found', message: 'no such project' },
+      })),
+    }))
+    const failure = await controller.generateBrief({ projectId: 'ghost' })
+    expect(failure).toEqual({ code: 'project-not-found', message: 'no such project' })
+    const brief = controller.getSnapshot().brief
+    expect(brief.status).toBe('error')
+    expect(brief.failure?.code).toBe('project-not-found')
+  })
+
+  it('addJournal sends exactly the text and project scope, and toasts once', async () => {
+    const seen: unknown[] = []
+    const controller = new ResearchController(stubRemote({
+      addJournalEntry: (request) => {
+        seen.push(request)
+        return Promise.resolve(carried<ResearchAddJournalEntryResult>({ ok: true, value: { event: JOURNAL_EVENT } }))
+      },
+    }))
+    const failure = await controller.addJournal('这一句算数', 'p1')
+    expect(failure).toBeNull()
+    expect(seen).toEqual([{ text: '这一句算数', projectId: 'p1' }])
+    expect(controller.getSnapshot().toasts).toHaveLength(1)
+    expect(controller.getSnapshot().toasts[0]?.copy).toBe('journal.added')
+  })
+
+  it('addJournal omits the projectId key entirely for an unscoped entry', async () => {
+    const seen: unknown[] = []
+    const controller = new ResearchController(stubRemote({
+      addJournalEntry: (request) => {
+        seen.push(request)
+        return Promise.resolve(carried<ResearchAddJournalEntryResult>({ ok: true, value: { event: JOURNAL_EVENT } }))
+      },
+    }))
+    const failure = await controller.addJournal('不限项目的一句', null)
+    expect(failure).toBeNull()
+    // exactOptionalPropertyTypes: the absent scope must not cross as `undefined`.
+    expect(seen).toEqual([{ text: '不限项目的一句' }])
+    expect(Object.prototype.hasOwnProperty.call(seen[0], 'projectId')).toBe(false)
+  })
+
+  it('addJournal returns the failure view inline and stays quiet', async () => {
+    const controller = new ResearchController(stubRemote({
+      addJournalEntry: () => Promise.resolve(carried<ResearchAddJournalEntryResult>({
+        ok: false,
+        error: { code: 'invalid-input', message: 'journal text must not be empty' },
+      })),
+    }))
+    const failure = await controller.addJournal('   ', null)
+    expect(failure).toEqual({ code: 'invalid-input', message: 'journal text must not be empty' })
+    expect(controller.getSnapshot().toasts).toEqual([])
   })
 })
