@@ -141,28 +141,32 @@ describe('LedgerView render smoke (S2 storyline + S4 foraging)', () => {
     expect(html).toContain('<svg')
     expect(html).toContain('●')
     expect(html).toContain('✗')
-    // Lifelines + the epoch line + the now-line all present.
-    expect(html.match(/<line/g)?.length ?? 0).toBeGreaterThanOrEqual(5)
-    // The branch graph: fork elbows + the merge-back elbow + beads reach HTML.
-    expect(html).toContain('worktreeGraphFork')
-    expect(html).toContain('worktreeGraphMerge')
+    // The epoch rules and the now-line are the graph's verticals.
+    expect(html.match(/<line/g)?.length ?? 0).toBeGreaterThanOrEqual(2)
+    // The branch flow: fat curves + beads reach HTML; NO text inside the SVG
+    // (labels/glyphs removed — status speaks through shape and color).
+    expect(html).toContain('worktreeFlowCurve')
+    expect(html).toContain('worktreeFlowMain')
+    expect(html).toContain('worktreeFlowDead')
+    expect(html.match(/<path/g)?.length ?? 0).toBeGreaterThanOrEqual(4)
     expect(html.match(/<circle/g)?.length ?? 0).toBeGreaterThanOrEqual(8)
-    expect(html).toContain('压缩刻度')
+    expect(html).not.toContain('worktreeGraphLabel')
+    expect(html).toContain('研究分支图')
+    expect(html).toContain('曲线=研究线')
     // An adopted lane reaches HTML with its merge glyph.
     expect(html).toContain('已并入（✓）')
     expect(html).toContain('Late-interaction pooling')
     // Lane tooltips keep formatting ISO dates (the audit's crash spot).
 
     // Foraging: title, the speaking baseline, both territories, the GUT copy.
-    expect(html).toContain('分支图（Sourcetree 式）')
-    expect(html).toContain('领地账本（觅食）')
+    expect(html).toContain('研究节奏')
     expect(html).toContain('中位 6 天')
     expect(html).toContain('四分位距 4 天')
     expect(html).toContain('5 次有据的离开')
     expect(html).toContain('距上次收获 5 天')
     expect(html).toContain('离开间隔中位 6 天')
     expect(html).toContain('Claim atlas')
-    expect(html).toContain('尚未开垦')
+    expect(html).toContain('还没有动态')
     expect(html).toContain('两个数字，零动词')
   })
 })

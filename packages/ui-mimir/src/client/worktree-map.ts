@@ -1,20 +1,18 @@
 /**
- * Pure layout for the worktree's branch graph — the Sourcetree form, clay
- * skin applied at render: ONE vertical lane per research line (time flows
- * top→bottom toward now), declared derivation edges as fork elbows, adopted
- * lines merge back toward their declared parent, and EVERY work node is a
- * bead on its lane (terminal > create > work > meta on the bead scale).
- *
- * Time is COMPRESSED, Sourcetree-style: one grid row per moment batch, not
- * wall-clock proportion — the caption says so; GUT/idle magnitudes live in
- * the list's numbers, the map carries topology and sequence.
+ * Pure layout for the worktree's branch flow — the git-workflowillustration
+ * form (fat colored curves ballooning off a main axis and merging back),
+ * clay skin applied at render: time flows left→right (compressed, one
+ * column per moment batch), the mainline-declared lane rides the axis, every
+ * other research line bows out to its own amplitude and either merges back
+ * (adopted), ends with its documented No (failed), or runs to the now-line
+ * (open). Every work node is a bead ON its curve (terminal > create >
+ * work > meta on the bead scale). NO TEXT lives in the SVG — status speaks
+ * through shape and color; names and magnitudes stay in the lane list.
  *
  * Deterministic and order-independent: a pure fold over the worktree view.
- * Preorder over the declared forest (roots by first touch, then id;
- * children likewise) keeps every subtree contiguous with short forks.
- * NOTHING here infers structure: only user-declared parent edges draw; a
- * dangling or cyclic declaration degrades to a root, never a crash.
- * Presentation constants only — no CBE-governed scalars live here.
+ * NOTHING here infers structure: only user-declared parent edges shape the
+ * curves; a dangling or cyclic declaration degrades to a root, never a
+ * crash. Presentation constants only — no CBE-governed scalars live here.
  * @module dsh-client-ui-mimir/client/worktree-map
  */
 
@@ -24,46 +22,47 @@ import type {
   ResearchWorktreeView,
 } from 'dsh-mimir/types'
 
-/** Visible-row budget (moments beyond it compress into shared rows). */
-export const WORKTREE_GRAPH_MAX_ROWS = 24
-/** One lane's column width in viewBox units. */
-export const WORKTREE_GRAPH_LANE_W = 18
-/** One grid row's height in viewBox units. */
-export const WORKTREE_GRAPH_ROW_H = 16
-/** Visible-track cap. */
-export const WORKTREE_GRAPH_MAX_TRACKS = 24
-/** Label-gutter width in viewBox units. */
-export const WORKTREE_GRAPH_LABEL_GUTTER = 128
+/** Time-column budget (moments beyond it fold into shared columns). */
+export const WORKTREE_FLOW_MAX_COLS = 36
+/** Map width in viewBox units. */
+export const WORKTREE_FLOW_W = 640
+/** Vertical spacing between amplitude levels. */
+export const WORKTREE_FLOW_AMP = 26
+/** Fork/merge bow width in viewBox units. */
+export const WORKTREE_FLOW_BOW = 17
+/** Deepest amplitude level per side (beyond it lanes share the outer rail). */
+export const WORKTREE_FLOW_MAX_LEVEL = 4
 /**
- * The lane palette: eight macaron-distinct hues (Sourcetree gives every
- * branch its own color; these stay soft enough for the clay skin).
+ * The lane palette: eight macaron-distinct hues, soft enough for the clay
+ * skin (fat matte strokes read as clay rolls).
  */
-export const WORKTREE_GRAPH_PALETTE: readonly string[] = Object.freeze([
+export const WORKTREE_FLOW_PALETTE: readonly string[] = Object.freeze([
   '#d98a68', '#94b89b', '#85a7c6', '#bfa3c9',
   '#d4b06e', '#8ab8ab', '#cf9aa6', '#9aa3b8',
 ])
 
-const PAD_TOP = 12
-const PAD_BOTTOM = 18
-const PAD_LEFT = 8
+const PAD_X = 14
+const PAD_Y = 18
 
 function parseMs(iso: string): number | null {
   const ms = Date.parse(iso)
   return Number.isFinite(ms) ? ms : null
 }
 
-/** One placed lane: its column, vertical span, color, and gutter label. */
-export interface WorktreeGraphLane {
+/** One placed research line: its whole curve, plus the straight-section
+ *  span where its beads ride. */
+export interface WorktreeFlowLane {
   readonly lane: ResearchWorktreeLaneView
-  readonly x: number
-  readonly y1: number
-  readonly y2: number
   readonly color: string
   readonly isMain: boolean
+  /** The full SVG path (M … Q … L …, merging lines curve back to parent). */
+  readonly path: string
+  /** The curve's straight-section y (where beads sit). */
+  readonly y: number
 }
 
-/** One work node: a bead on its lane's column at a compressed row. */
-export interface WorktreeGraphBead {
+/** One work node: a bead on its curve at a compressed column. */
+export interface WorktreeFlowBead {
   readonly lineId: string
   readonly x: number
   readonly y: number
@@ -73,57 +72,41 @@ export interface WorktreeGraphBead {
   readonly color: string
 }
 
-/** One declared fork elbow: parent column → child column at the fork row. */
-export interface WorktreeGraphFork {
-  readonly parentLineId: string
-  readonly childLineId: string
-  readonly x1: number
-  readonly x2: number
-  readonly y: number
-  readonly color: string
-}
-
-/** One merge-back elbow: an adopted line curving to its declared parent. */
-export interface WorktreeGraphMerge {
-  readonly childLineId: string
-  readonly parentLineId: string
-  readonly x1: number
-  readonly x2: number
-  readonly y: number
-  readonly color: string
-}
-
-/** One mainline-declaration epoch (a dashed horizontal rule). */
-export interface WorktreeGraphEpoch {
-  readonly y: number
+/** One mainline-declaration epoch (a dashed vertical). */
+export interface WorktreeFlowEpoch {
+  readonly x: number
   readonly label: string
   readonly at: string
 }
 
-/** The whole graph geometry, ready for one deterministic SVG render. */
-export interface WorktreeGraphLayout {
+/** The whole flow geometry, ready for one deterministic SVG render. */
+export interface WorktreeFlowLayout {
   readonly width: number
   readonly height: number
-  readonly rows: number
+  readonly cols: number
   readonly momentCount: number
-  readonly lanes: readonly WorktreeGraphLane[]
-  readonly beads: readonly WorktreeGraphBead[]
-  readonly forks: readonly WorktreeGraphFork[]
-  readonly merges: readonly WorktreeGraphMerge[]
-  readonly epochs: readonly WorktreeGraphEpoch[]
-  readonly nowY: number
+  readonly mainY: number
+  readonly lanes: readonly WorktreeFlowLane[]
+  readonly beads: readonly WorktreeFlowBead[]
+  readonly epochs: readonly WorktreeFlowEpoch[]
+  readonly nowX: number
 }
 
 const BEAD_RANK: Readonly<Record<ResearchWorktreeTouchKind, number>> = {
   terminal: 3, create: 2, work: 1, meta: 0,
 }
 
+/** Bead radius on the bead scale (bumped when a column merged several). */
+export function beadRadius(kind: ResearchWorktreeTouchKind, count: number): number {
+  const base = kind === 'terminal' ? 4.6 : kind === 'create' ? 3.8 : kind === 'work' ? 2.8 : 2.1
+  return count > 1 ? base + 0.7 : base
+}
+
 /**
  * @param view - the derived worktree (lanes in ANY order; sorted internally).
- * @returns the deterministic vertical branch-graph layout (empty lanes when
- *  no parseable lane exists).
+ * @returns the deterministic flow layout (empty lanes when nothing parses).
  */
-export function layoutWorktreeGraph(view: ResearchWorktreeView): WorktreeGraphLayout {
+export function layoutWorktreeFlow(view: ResearchWorktreeView): WorktreeFlowLayout {
   const mainlineId = view.mainline?.lineId ?? null
 
   const candidates = new Map<string, ResearchWorktreeLaneView>()
@@ -132,7 +115,7 @@ export function layoutWorktreeGraph(view: ResearchWorktreeView): WorktreeGraphLa
     candidates.set(lane.lineId, lane)
   }
 
-  // ── The declared forest: preorder, roots by first touch, children after.
+  // ── The declared forest: preorder walk, roots by first touch.
   const childrenOf = new Map<string, string[]>()
   const roots: string[] = []
   for (const [lineId, lane] of candidates) {
@@ -146,8 +129,7 @@ export function layoutWorktreeGraph(view: ResearchWorktreeView): WorktreeGraphLa
     roots.push(lineId)
   }
   const firstMsOf = (lineId: string): number => parseMs(candidates.get(lineId)?.firstSeen ?? '') ?? 0
-  const byFirst = (a: string, b: string): number =>
-    firstMsOf(a) - firstMsOf(b) || a.localeCompare(b)
+  const byFirst = (a: string, b: string): number => firstMsOf(a) - firstMsOf(b) || a.localeCompare(b)
   roots.sort(byFirst)
   for (const list of childrenOf.values()) list.sort(byFirst)
   const ordered: string[] = []
@@ -161,11 +143,7 @@ export function layoutWorktreeGraph(view: ResearchWorktreeView): WorktreeGraphLa
   for (const root of roots) walk(root)
   for (const lineId of [...candidates.keys()].filter(id => !visited.has(id)).sort(byFirst)) walk(lineId)
 
-  const trackOf = new Map<string, number>()
-  ordered.slice(0, WORKTREE_GRAPH_MAX_TRACKS).forEach((lineId, track) => { trackOf.set(lineId, track) })
-  const xOf = (track: number): number => PAD_LEFT + track * WORKTREE_GRAPH_LANE_W + WORKTREE_GRAPH_LANE_W / 2
-
-  // ── Moments: every first touch, every bead, every end, epochs, now.
+  // ── Time compression: every moment folds into ≤ MAX_COLS columns.
   const moments = new Set<string>()
   for (const lane of candidates.values()) {
     moments.add(lane.firstSeen)
@@ -175,8 +153,8 @@ export function layoutWorktreeGraph(view: ResearchWorktreeView): WorktreeGraphLa
   for (const declaration of view.mainlineHistory) moments.add(declaration.declaredAt)
   moments.add(view.derivedAt)
   const sorted = [...moments].sort()
-  const rows = Math.min(sorted.length, WORKTREE_GRAPH_MAX_ROWS)
-  const rowIndexOf = (ts: string): number => {
+  const cols = Math.min(sorted.length, WORKTREE_FLOW_MAX_COLS)
+  const colIndexOf = (ts: string): number => {
     let low = 0
     let high = sorted.length - 1
     while (low < high) {
@@ -186,46 +164,108 @@ export function layoutWorktreeGraph(view: ResearchWorktreeView): WorktreeGraphLa
     }
     return low
   }
-  const rowOf = (ts: string): number =>
-    Math.min(rows - 1, Math.floor(rowIndexOf(ts) * rows / sorted.length))
-  const yOf = (row: number): number => PAD_TOP + row * WORKTREE_GRAPH_ROW_H
+  const colOf = (ts: string): number =>
+    Math.min(cols - 1, Math.floor(colIndexOf(ts) * cols / sorted.length))
+  const xOf = (col: number): number => PAD_X + (col / Math.max(1, cols - 1)) * (WORKTREE_FLOW_W - PAD_X * 2)
 
-  // ── Lanes.
-  const lanes: WorktreeGraphLane[] = []
-  for (const [lineId, track] of trackOf) {
+  // ── Amplitudes: mainline lane rides the axis; roots bow out level 1,
+  //    children one level beyond their parent; sides alternate by preorder
+  //    index so siblings spread above and below the axis.
+  const levelOf = new Map<string, number>()
+  const sideOf = new Map<string, number>()
+  const parentOf = new Map<string, string>()
+  let index = 0
+  for (const lineId of ordered) {
+    const parent = candidates.get(lineId)?.parentLineId ?? null
+    const hasParent = parent !== null && parent !== lineId && levelOf.has(parent)
+    parentOf.set(lineId, hasParent ? parent! : '')
+    if (lineId === mainlineId) {
+      levelOf.set(lineId, 0)
+      sideOf.set(lineId, 0)
+    } else if (hasParent) {
+      levelOf.set(lineId, Math.min(WORKTREE_FLOW_MAX_LEVEL, (levelOf.get(parent!) ?? 0) + 1))
+      sideOf.set(lineId, index % 2 === 0 ? -1 : 1)
+    } else {
+      levelOf.set(lineId, 1)
+      sideOf.set(lineId, index % 2 === 0 ? -1 : 1)
+    }
+    index += 1
+  }
+
+  // The axis sits so the busiest side fits: up levels above, down below.
+  let up = 0
+  let down = 0
+  for (const lineId of ordered) {
+    const level = levelOf.get(lineId) ?? 0
+    const side = sideOf.get(lineId) ?? 0
+    if (side < 0) up = Math.max(up, level)
+    if (side > 0) down = Math.max(down, level)
+  }
+  const mainY = PAD_Y + up * WORKTREE_FLOW_AMP
+  const height = mainY + down * WORKTREE_FLOW_AMP + PAD_Y
+  const yOfLane = (lineId: string): number =>
+    mainY + (sideOf.get(lineId) ?? 0) * (levelOf.get(lineId) ?? 0) * WORKTREE_FLOW_AMP
+
+  // ── Curves + straight sections.
+  const lanes: WorktreeFlowLane[] = []
+  const sectionOf = new Map<string, { xs: number; xe: number; y: number }>()
+  for (const lineId of ordered) {
     const lane = candidates.get(lineId)
     if (lane === undefined) continue
+    const x0 = xOf(colOf(lane.firstSeen))
+    const xEnd = xOf(colOf(lane.closedAt ?? lane.lastSeen))
+    const y = yOfLane(lineId)
+    const parent = parentOf.get(lineId) ?? ''
+    const curves = parent !== '' && levelOf.get(parent) !== undefined
+    const yS = curves ? mainY + (sideOf.get(parent) ?? 0) * (levelOf.get(parent) ?? 0) * WORKTREE_FLOW_AMP : y
+    const xs = curves ? Math.min(x0 + WORKTREE_FLOW_BOW * 1.6, xEnd) : x0
+    const adopted = lane.status === 'adopted' && curves
+    const xe = adopted ? Math.max(xs, xEnd - WORKTREE_FLOW_BOW * 1.6) : xEnd
+    let path: string
+    if (!curves || yS === y) {
+      path = `M ${String(x0)} ${String(y)} L ${String(xEnd)} ${String(y)}`
+    } else {
+      path = `M ${String(x0)} ${String(yS)} Q ${String(x0 + WORKTREE_FLOW_BOW)} ${String(yS)} ${String(xs)} ${String(y)} L ${String(xe)} ${String(y)}`
+      if (adopted) {
+        path += ` Q ${String(xEnd - WORKTREE_FLOW_BOW)} ${String(yS)} ${String(xEnd)} ${String(yS)}`
+      } else {
+        path += ` L ${String(xEnd)} ${String(y)}`
+      }
+    }
+    const track = [...ordered].indexOf(lineId)
     lanes.push({
       lane,
-      x: xOf(track),
-      y1: yOf(rowOf(lane.firstSeen)),
-      y2: yOf(rowOf(lane.closedAt ?? lane.lastSeen)),
-      color: WORKTREE_GRAPH_PALETTE[track % WORKTREE_GRAPH_PALETTE.length] ?? '#9aa3b8',
+      color: WORKTREE_FLOW_PALETTE[track % WORKTREE_FLOW_PALETTE.length] ?? '#9aa3b8',
       isMain: lineId === mainlineId,
+      path,
+      y,
     })
+    sectionOf.set(lineId, { xs, xe: adopted ? xe : xEnd, y })
   }
-  const lanePlaced = new Map(lanes.map(entry => [entry.lane.lineId, entry]))
 
-  // ── Beads (work nodes), compressed-row dedup with a count.
-  const beads: WorktreeGraphBead[] = []
+  // ── Beads ride their curve's straight section (clamped into it).
+  const beads: WorktreeFlowBead[] = []
   for (const entry of lanes) {
-    const byRow = new Map<number, { at: string; kind: ResearchWorktreeTouchKind; count: number }>()
+    const section = sectionOf.get(entry.lane.lineId)
+    if (section === undefined) continue
+    const byCol = new Map<number, { at: string; kind: ResearchWorktreeTouchKind; count: number }>()
     for (const touch of entry.lane.touches) {
-      const row = rowOf(touch.at)
-      const slot = byRow.get(row)
+      const col = colOf(touch.at)
+      const slot = byCol.get(col)
       if (slot === undefined) {
-        byRow.set(row, { at: touch.at, kind: touch.kind, count: 1 })
+        byCol.set(col, { at: touch.at, kind: touch.kind, count: 1 })
         continue
       }
       slot.count += 1
       if (BEAD_RANK[touch.kind] > BEAD_RANK[slot.kind]) slot.kind = touch.kind
       if (touch.at < slot.at) slot.at = touch.at
     }
-    for (const [row, slot] of byRow) {
+    for (const [col, slot] of byCol) {
+      const x = Math.min(Math.max(xOf(col), section.xs), section.xe)
       beads.push({
         lineId: entry.lane.lineId,
-        x: entry.x,
-        y: yOf(row),
+        x,
+        y: section.y,
         kind: slot.kind,
         at: slot.at,
         count: slot.count,
@@ -234,66 +274,21 @@ export function layoutWorktreeGraph(view: ResearchWorktreeView): WorktreeGraphLa
     }
   }
 
-  // ── Forks + merge-backs (declared edges only, true ancestors only).
-  const forks: WorktreeGraphFork[] = []
-  const merges: WorktreeGraphMerge[] = []
-  for (const entry of lanes) {
-    const parent = entry.lane.parentLineId
-    if (parent === null || parent === entry.lane.lineId) continue
-    const parentEntry = lanePlaced.get(parent)
-    if (parentEntry === undefined) continue
-    if (parentEntry.x >= entry.x) continue // cycle-degraded: not an ancestor
-    forks.push({
-      parentLineId: parent,
-      childLineId: entry.lane.lineId,
-      x1: parentEntry.x,
-      x2: entry.x,
-      y: entry.y1,
-      color: entry.color,
-    })
-    if (entry.lane.status === 'adopted') {
-      merges.push({
-        childLineId: entry.lane.lineId,
-        parentLineId: parent,
-        x1: entry.x,
-        x2: parentEntry.x,
-        y: entry.y2,
-        color: entry.color,
-      })
-    }
-  }
-
-  const epochs: WorktreeGraphEpoch[] = view.mainlineHistory.map(declaration => ({
-    y: yOf(rowOf(declaration.declaredAt)),
+  const epochs: WorktreeFlowEpoch[] = view.mainlineHistory.map(declaration => ({
+    x: xOf(colOf(declaration.declaredAt)),
     label: declaration.label,
     at: declaration.declaredAt,
   }))
 
-  const width = PAD_LEFT + Math.min(trackOf.size, WORKTREE_GRAPH_MAX_TRACKS) * WORKTREE_GRAPH_LANE_W
-    + WORKTREE_GRAPH_LABEL_GUTTER
-  const height = yOf(Math.max(0, rows - 1)) + PAD_BOTTOM
-
   return Object.freeze({
-    width,
+    width: WORKTREE_FLOW_W,
     height,
-    rows,
+    cols,
     momentCount: sorted.length,
+    mainY,
     lanes: Object.freeze(lanes),
     beads: Object.freeze(beads),
-    forks: Object.freeze(forks),
-    merges: Object.freeze(merges),
     epochs: Object.freeze(epochs),
-    nowY: yOf(rowOf(view.derivedAt)),
+    nowX: xOf(colOf(view.derivedAt)),
   })
-}
-
-/** A bead's radius on the bead scale (bumped when a row merged several). */
-export function beadRadius(kind: ResearchWorktreeTouchKind, count: number): number {
-  const base = kind === 'terminal' ? 4.2 : kind === 'create' ? 3.6 : kind === 'work' ? 2.6 : 2
-  return count > 1 ? base + 0.6 : base
-}
-
-/** Gutter-label text: capped, with an ellipsis when it overflows. */
-export function gutterLabel(label: string, max = 14): string {
-  return label.length <= max ? label : `${label.slice(0, Math.max(1, max - 1))}…`
 }

@@ -16,7 +16,7 @@ import type { ResearchWorktreeSlice, ResearchFailureView } from './controller.ts
 import type { ResearchKey } from './locales.ts'
 import type { ResearchT } from './view-common.ts'
 import { closeReasonState, isIdeaLane, WORKTREE_REASON_MAX_CHARS } from './worktree-view.ts'
-import { beadRadius, gutterLabel, layoutWorktreeGraph } from './worktree-map.ts'
+import { beadRadius, layoutWorktreeFlow } from './worktree-map.ts'
 import css from './ResearchPanel.module.css'
 
 /** Whole days, rounded for display (the wire carries r3 precision). */
@@ -25,124 +25,81 @@ function days(value: number): string {
 }
 
 /**
- * The branch graph — Sourcetree's form in a clay skin: one vertical lane
- * per research line (time flows top→bottom toward now), declared forks as
- * elbow curves into the child's first bead, adopted lines curve back to
- * their declared parent (the merge), and EVERY work node is a bead —
+ * The branch flow — the git-workflow illustration form in a clay skin:
+ * time flows left→right on a compressed scale, the mainline lane rides the
+ * axis, every other research line bows out as a fat colored curve and
+ * either merges back (adopted), stops at its documented No (failed), or
+ * runs to the now-line (open). Every work node is a bead ON its curve —
  * terminal outcomes largest, eureka creations next, weighted work mid,
- * zero-weight touches smallest. Mainline-declaration epochs rule across as
- * dashed horizontals. Compressed time (one row per moment batch, not
- * wall-clock) is stated in the caption; magnitudes live in the list.
+ * zero-weight touches smallest. NO TEXT renders inside the SVG: status
+ * speaks through shape and color (dashed gray tail = dead end, double
+ * stroke = merge); names, dates, and magnitudes live in the lane list and
+ * the tooltips.
  * @param props - the worktree view model and copy.
- * @returns the graph SVG block (or nothing before any lane exists).
+ * @returns the flow SVG block (or nothing before any lane exists).
  */
-function WorktreeGraphStrip({ view, t }: { readonly view: ResearchWorktreeView; readonly t: ResearchT }) {
-  const graph = layoutWorktreeGraph(view)
-  if (graph.lanes.length === 0) return null
+function WorktreeFlowStrip({ view, t }: { readonly view: ResearchWorktreeView; readonly t: ResearchT }) {
+  const flow = layoutWorktreeFlow(view)
+  if (flow.lanes.length === 0) return null
   return (
-    <div className={css.worktreeGraphBox} role="img" aria-label={t('worktree.graph')}>
-      <svg viewBox={`0 0 ${String(graph.width)} ${String(graph.height)}`} preserveAspectRatio="xMidYMin meet">
-        {graph.epochs.map(epoch => (
+    <div className={css.worktreeFlowBox} role="img" aria-label={t('worktree.graph')}>
+      <svg viewBox={`0 0 ${String(flow.width)} ${String(flow.height)}`} preserveAspectRatio="xMidYMin meet">
+        {flow.epochs.map(epoch => (
           <line
             key={`epoch-${epoch.label}-${epoch.at}`}
-            x1={0} x2={graph.width} y1={epoch.y} y2={epoch.y}
-            className={css.worktreeGraphEpoch}
+            x1={epoch.x} x2={epoch.x} y1={0} y2={flow.height}
+            className={css.worktreeFlowEpoch}
           >
             <title>{`${epoch.label} · ${epoch.at.slice(0, 10)}`}</title>
           </line>
         ))}
-        {graph.forks.map(fork => (
+        {flow.lanes.map(entry => (
           <path
-            key={`fork-${fork.parentLineId}-${fork.childLineId}`}
-            className={css.worktreeGraphFork}
-            stroke={fork.color}
-            d={`M ${String(fork.x1)} ${String(fork.y - 10)} C ${String(fork.x1)} ${String(fork.y - 1)}, ${String(fork.x2)} ${String(fork.y - 10)}, ${String(fork.x2)} ${String(fork.y)}`}
-          >
-            <title>{`${fork.childLineId} ← ${fork.parentLineId}`}</title>
-          </path>
-        ))}
-        {graph.merges.map(merge => (
-          <path
-            key={`merge-${merge.childLineId}-${merge.parentLineId}`}
-            className={css.worktreeGraphMerge}
-            stroke={merge.color}
-            d={`M ${String(merge.x1)} ${String(merge.y - 7)} C ${String(merge.x1)} ${String(merge.y + 4)}, ${String(merge.x2)} ${String(merge.y - 8)}, ${String(merge.x2)} ${String(merge.y - 1)}`}
-          >
-            <title>{`${merge.childLineId} → ${merge.parentLineId} (merged)`}</title>
-          </path>
-        ))}
-        {graph.lanes.map(entry => (
-          <line
             key={`lane-${entry.lane.lineId}`}
-            x1={entry.x} x2={entry.x} y1={entry.y1} y2={entry.y2}
+            d={entry.path}
             className={
-              entry.lane.status === 'failed' ? css.worktreeGraphLaneDead
-                : entry.lane.status === 'adopted' ? css.worktreeGraphLaneAdopted
-                  : entry.isMain ? css.worktreeGraphLaneMain
-                    : css.worktreeGraphLane
+              entry.lane.status === 'failed' ? css.worktreeFlowDead
+                : entry.lane.status === 'adopted' ? css.worktreeFlowAdopted
+                  : entry.isMain ? css.worktreeFlowMain
+                    : css.worktreeFlowCurve
             }
             stroke={entry.color}
           >
             <title>{`${entry.lane.label} · ${entry.lane.firstSeen.slice(0, 10)} → ${(entry.lane.closedAt ?? entry.lane.lastSeen).slice(0, 10)}`}</title>
-          </line>
+          </path>
         ))}
-        {graph.beads.map(bead => {
+        {flow.beads.map(bead => {
           const key = `bead-${bead.lineId}-${bead.at}-${String(bead.count)}`
           return (
-            <g key={key}>
-              <circle
-                cx={bead.x} cy={bead.y} r={beadRadius(bead.kind, bead.count)}
-                className={bead.kind === 'terminal' ? css.worktreeGraphBeadTerminal : css.worktreeGraphBead}
-                fill={bead.color}
-              >
-                <title>{`${bead.lineId} · ${bead.kind} × ${String(bead.count)} · ${bead.at.slice(0, 16).replace('T', ' ')}`}</title>
-              </circle>
-              {bead.kind === 'terminal' && (
-                <text
-                  x={bead.x} y={bead.y + 2.2} textAnchor="middle"
-                  className={css.worktreeGraphBeadGlyph}
-                >
-                  {terminalGlyph(view, bead.lineId)}
-                </text>
-              )}
-            </g>
+            <circle
+              key={key}
+              cx={bead.x} cy={bead.y} r={beadRadius(bead.kind, bead.count)}
+              className={
+                bead.kind === 'terminal' ? css.worktreeFlowBeadTerminal
+                  : bead.kind === 'meta' ? css.worktreeFlowBeadMeta
+                    : css.worktreeFlowBead
+              }
+              fill={bead.color}
+            >
+              <title>{`${bead.lineId} · ${bead.kind} × ${String(bead.count)} · ${bead.at.slice(0, 16).replace('T', ' ')}`}</title>
+            </circle>
           )
         })}
         <line
-          x1={0} x2={graph.width} y1={graph.nowY} y2={graph.nowY}
-          className={css.worktreeGraphNow}
+          x1={flow.nowX} x2={flow.nowX} y1={0} y2={flow.height}
+          className={css.worktreeFlowNow}
         >
           <title>{view.derivedAt.slice(0, 16).replace('T', ' ')}</title>
         </line>
-        {graph.lanes.map(entry => (
-          <text
-            key={`label-${entry.lane.lineId}`}
-            x={graph.width - 6} y={entry.y2 + 3} textAnchor="end"
-            className={
-              entry.lane.status === 'failed' ? css.worktreeGraphLabelDead
-                : entry.isMain ? css.worktreeGraphLabelMain
-                  : css.worktreeGraphLabel
-            }
-            fill={entry.color}
-          >
-            {gutterLabel(entry.lane.label)}
-          </text>
-        ))}
       </svg>
-      <p className={css.worktreeGraphNote}>
+      <p className={css.worktreeFlowNote}>
         {t('worktree.graph.note')}
-        {graph.momentCount > graph.rows
-          ? ` · ${t('worktree.graph.compressed', { moments: String(graph.momentCount), rows: String(graph.rows) })}`
+        {flow.momentCount > flow.cols
+          ? ` · ${t('worktree.graph.compressed', { moments: String(flow.momentCount), rows: String(flow.cols) })}`
           : ''}
       </p>
     </div>
   )
-}
-
-/** The lane's terminal glyph on the bead (✗ a documented No, ✓ a merge, ● still walking). */
-function terminalGlyph(view: ResearchWorktreeView, lineId: string): string {
-  const lane = view.lanes.find(entry => entry.lineId === lineId)
-  return lane?.status === 'failed' ? '✗' : lane?.status === 'adopted' ? '✓' : '●'
 }
 
 /** One lane row: the glyph, the label, the E0 numbers, and the declared structure. */
@@ -400,8 +357,8 @@ export function WorktreeView({
                 </>
               )}
           </div>
-          {/* The branch graph: vertical lanes + forks + merge-backs + beads. */}
-          <WorktreeGraphStrip view={view} t={t} />
+          {/* The branch flow: fat curves from the axis, beads = work nodes. */}
+          <WorktreeFlowStrip view={view} t={t} />
 
           {lanes.length === 0 && <p className={css.hint}>{t('worktree.empty')}</p>}
           {groups.map(group => group.lanes.length === 0 ? null : (
