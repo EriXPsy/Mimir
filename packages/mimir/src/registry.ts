@@ -206,4 +206,13 @@ export const PARAMETER_REGISTRY: Readonly<Record<string, CbeParameterEntry>> = O
     issue: 'G1: compare 90/180/365 by descriptive fit, never by outcome reward.',
     lastReviewed: '2026-08-27',
   },
+
+  /* ── foraging.ts (S4, batch 5) ────────────────────────────────────── */
+  CBE_GUT_BASELINE_MIN_DEPARTURES: {
+    value: 5,
+    track: 'provisional',
+    anchor: 'I2’s no-words floor applied to departures: five documented closes before the personal baseline may speak.',
+    issue: 'Provisional until G1; the GUT number itself stays E0 (a date difference) regardless.',
+    lastReviewed: '2026-08-27',
+  },
 })

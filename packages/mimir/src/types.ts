@@ -1034,3 +1034,50 @@ export type ResearchGetEvidenceProfileResult = ResearchResult<{
   readonly profile: ResearchEvidenceProfileView
 }>
 
+/* ── Foraging (S4) wire payloads — the territory ledger and GUT cards ──── */
+
+/** One research territory's E0 ledger row (label-resolved for the view). */
+export interface ResearchTerritoryView {
+  readonly projectId: string
+  readonly label: string
+  readonly eventCount: number
+  readonly firstSeen: string
+  readonly lastSeen: string
+  /** Kernel-decayed |weight| mass — attention, sign-blind. */
+  readonly activityMass: number
+  /** Clean compiles — the v1 harvest proxy (claim/job terminals carry no project ref yet). */
+  readonly harvestCount: number
+  readonly lastHarvestAt: string | null
+  readonly daysSinceHarvest: number | null
+  readonly daysSinceActivity: number
+}
+
+/** The personal giving-up-time baseline (silent below its floor). */
+export interface ResearchGutBaselineView {
+  readonly samples: number
+  readonly medianDays: number | null
+  readonly iqrDays: number | null
+  readonly minSamples: number
+  readonly speaks: boolean
+}
+
+/** The GUT card's data: two numbers, zero verbs. */
+export interface ResearchGutCardView {
+  readonly projectId: string
+  readonly label: string
+  readonly daysSinceHarvest: number | null
+  readonly daysSinceActivity: number
+  readonly baselineMedianDays: number | null
+}
+
+/** `getForaging` payload: the whole foraging layer, E0 by construction. */
+export interface ResearchForagingView {
+  readonly derivedAt: string
+  readonly territories: readonly ResearchTerritoryView[]
+  readonly baseline: ResearchGutBaselineView
+  readonly cards: readonly ResearchGutCardView[]
+}
+
+/** `getForaging` result: a pure query, writes nothing. */
+export type ResearchGetForagingResult = ResearchResult<{ readonly foraging: ResearchForagingView }>
+

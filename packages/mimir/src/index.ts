@@ -202,6 +202,18 @@ export type {
   CbeActionValue,
   CbeEvidenceActionRow,
 } from './cbe-engine.ts'
+export {
+  deriveForaging,
+  deriveTerritories,
+  deriveGutBaseline,
+  CBE_GUT_BASELINE_MIN_DEPARTURES,
+} from './foraging.ts'
+export type {
+  CbeForaging,
+  CbeTerritory,
+  CbeGutBaseline,
+  CbeGutCard,
+} from './foraging.ts'
 export { parseLatexErrors } from './latex-log.ts'
 export type { LatexIssue } from './latex-log.ts'
 export { parseTexOutline } from './outline.ts'

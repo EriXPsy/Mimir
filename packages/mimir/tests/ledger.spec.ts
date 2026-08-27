@@ -827,6 +827,48 @@ describe('evidence engine remotes (S3 service wiring)', () => {
   })
 })
 
+describe('foraging remotes (S4 service wiring)', () => {
+  it('getForaging derives an empty layer over a fresh wiki', async () => {
+    const { service } = await serviceHarness()
+    const outcome = await service.getForaging()
+    expect(outcome.ok).toBe(true)
+    if (!outcome.ok) throw new Error('unreachable')
+    expect(outcome.value.foraging.territories).toEqual([])
+    expect(outcome.value.foraging.baseline.speaks).toBe(false)
+  })
+
+  it('getForaging returns territory rows with the clean-compile harvest proxy', async () => {
+    const now = Date.now()
+    const { domain, service } = await serviceHarness()
+    await domain.table('projects').put(PROJECT.id, PROJECT)
+    await appendEvent(domain, {
+      actor: WIKI_AGENT_ACTOR,
+      action: 'experiments.saved',
+      refs: { projectId: PROJECT.id },
+      payload: { name: 'run', created: true },
+      now: new Date(now - 3 * 86_400_000),
+    })
+    await appendEvent(domain, {
+      actor: SERVICE_ACTOR,
+      action: 'writing.compile.settled',
+      refs: { projectId: PROJECT.id },
+      payload: { issues: 0 },
+      now: new Date(now - 1 * 86_400_000),
+    })
+    const outcome = await service.getForaging()
+    expect(outcome.ok).toBe(true)
+    if (!outcome.ok) throw new Error('unreachable')
+    const territory = outcome.value.foraging.territories.find(item => item.projectId === PROJECT.id)
+    expect(territory?.label).toBe(PROJECT.title)
+    expect(territory?.eventCount).toBe(2)
+    expect(territory?.harvestCount).toBe(1)
+    expect(territory?.daysSinceHarvest).toBeGreaterThanOrEqual(1)
+    expect(territory?.daysSinceHarvest).toBeLessThan(2)
+    const card = outcome.value.foraging.cards.find(item => item.projectId === PROJECT.id)
+    expect(card?.baselineMedianDays).toBeNull() // the baseline stays silent below five closes
+  })
+})
+
 describe('wiki_note ledger wiring (agent actor)', () => {
   /** The tool's execute needs a ToolRunContext it never reads in these paths. */
   const NO_EXEC = {} as ToolRunContext

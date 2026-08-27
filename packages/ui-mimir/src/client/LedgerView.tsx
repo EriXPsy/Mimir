@@ -12,13 +12,14 @@
 
 import { useEffect, useState } from 'react'
 import type { EventRecord, ResearchEventFilter, ResearchGenerateBriefOptions, ResearchProgressReportOptions } from 'dsh-mimir/types'
-import type { ResearchBriefView, ResearchFailureView, ResearchLedgerView, ResearchReportView, ResearchWorktreeSlice } from './controller.ts'
+import type { ResearchBriefView, ResearchFailureView, ResearchForagingSlice, ResearchLedgerView, ResearchReportView, ResearchWorktreeSlice } from './controller.ts'
 import type { ResearchKey } from './locales.ts'
 import type { ResearchT } from './view-common.ts'
 import { renderMarkdown } from './MarkdownView.tsx'
 import { ViewHead } from './ViewHead.tsx'
 import { CognitiveBriefView } from './CognitiveBriefView.tsx'
 import { WorktreeView } from './WorktreeView.tsx'
+import { ForagingView } from './ForagingView.tsx'
 import {
   ACTOR_KEYS, LEDGER_LIST_LIMIT, LEDGER_WINDOWS,
   ledgerIsDestructive, ledgerPayloadLine, ledgerTimeParts, ledgerWindowFilter,
@@ -71,13 +72,15 @@ function LedgerRow({ event, t }: {
  * @returns the ledger view.
  */
 export function LedgerView({
-  ledger, report, brief, worktree, selectedProjectId, loadLedger, generateReport, generateBrief, addJournal,
-  ensureWorktree, refreshWorktree, setMainline, setIdeaParent, closeIdea, t,
+  ledger, report, brief, worktree, foraging, selectedProjectId, loadLedger, generateReport, generateBrief, addJournal,
+  ensureWorktree, refreshWorktree, setMainline, setIdeaParent, closeIdea,
+  ensureForaging, refreshForaging, t,
 }: {
   readonly ledger: ResearchLedgerView
   readonly report: ResearchReportView
   readonly brief: ResearchBriefView
   readonly worktree: ResearchWorktreeSlice
+  readonly foraging: ResearchForagingSlice
   readonly selectedProjectId: string | null
   readonly loadLedger: (filter: ResearchEventFilter) => void
   readonly generateReport: (options: ResearchProgressReportOptions) => Promise<ResearchFailureView | null>
@@ -97,6 +100,10 @@ export function LedgerView({
   readonly setIdeaParent: (ideaId: string, parentIdeaId: string | null) => Promise<ResearchFailureView | null>
   /** Close one idea lane as a documented No. */
   readonly closeIdea: (ideaId: string, reason: string) => Promise<ResearchFailureView | null>
+  /** Load the foraging layer once, on the ledger view's first open. */
+  readonly ensureForaging: () => void
+  /** Re-fetch the foraging layer (the card's refresh button). */
+  readonly refreshForaging: () => void
   readonly t: ResearchT
 }) {
   // Named ledgerWindow (not `window`): the global window (timers, clipboard)
@@ -111,10 +118,13 @@ export function LedgerView({
   useEffect(() => {
     loadLedger(ledgerWindowFilter(ledgerWindow, scopedProjectId, Date.now()))
   }, [ledgerWindow, scopedProjectId, loadLedger])
-  // The worktree loads once on the view's first open (the tab mounts here).
+  // The worktree and foraging layers load once on the view's first open.
   useEffect(() => {
     ensureWorktree()
   }, [ensureWorktree])
+  useEffect(() => {
+    ensureForaging()
+  }, [ensureForaging])
 
   const refresh = (): void => {
     loadLedger(ledgerWindowFilter(ledgerWindow, scopedProjectId, Date.now()))
@@ -208,6 +218,14 @@ export function LedgerView({
         setIdeaParent={setIdeaParent}
         closeIdea={closeIdea}
         refreshLedger={refresh}
+        t={t}
+      />
+
+      {/* The foraging layer (S4): territories, the GUT baseline, the GUT
+          cards — two numbers, zero verbs. */}
+      <ForagingView
+        foraging={foraging}
+        refreshForaging={refreshForaging}
         t={t}
       />
 

@@ -30,6 +30,8 @@ import type {
   ResearchSetIdeaParentResult,
   ResearchSetMainlineResult,
   ResearchWorktreeView,
+  ResearchForagingView,
+  ResearchGetForagingResult,
   ResearchImportBibResult,
   ResearchImportPaperResult,
   ResearchListEventsResult,
@@ -121,6 +123,7 @@ function stubRemote(overrides: Partial<ResearchRemote>): ResearchRemote {
     generateBrief: missing('generateBrief'),
     addJournalEntry: missing('addJournalEntry'),
     getWorktree: missing('getWorktree'),
+    getForaging: missing('getForaging'),
     setMainline: missing('setMainline'),
     setIdeaParent: missing('setIdeaParent'),
     closeIdea: missing('closeIdea'),
@@ -2099,5 +2102,65 @@ describe('ResearchController worktree (S2)', () => {
     await new Promise(resolve => { setTimeout(resolve, 0) })
     expect(loads).toBe(2)
     expect(controller.getSnapshot().toasts[0]?.copy).toBe('worktree.closed')
+  })
+})
+
+describe('ResearchController foraging (S4)', () => {
+  const LAYER: ResearchForagingView = {
+    derivedAt: '2026-08-27T08:00:00.000Z',
+    territories: [
+      {
+        projectId: 'p1', label: 'Project One', eventCount: 6,
+        firstSeen: '2026-08-01T00:00:00.000Z', lastSeen: '2026-08-26T00:00:00.000Z',
+        activityMass: 4.2, harvestCount: 1, lastHarvestAt: '2026-08-20T00:00:00.000Z',
+        daysSinceHarvest: 6, daysSinceActivity: 1,
+      },
+    ],
+    baseline: { samples: 2, medianDays: null, iqrDays: null, minSamples: 5, speaks: false },
+    cards: [
+      { projectId: 'p1', label: 'Project One', daysSinceHarvest: 6, daysSinceActivity: 1, baselineMedianDays: null },
+    ],
+  }
+
+  it('ensureForaging loads once and publishes the ready slice', async () => {
+    let calls = 0
+    const controller = new ResearchController(stubRemote({
+      getForaging: () => {
+        calls += 1
+        return Promise.resolve(carried<ResearchGetForagingResult>({ ok: true, value: { foraging: LAYER } }))
+      },
+    }))
+    controller.ensureForaging()
+    controller.ensureForaging()
+    await new Promise(resolve => { setTimeout(resolve, 0) })
+    expect(calls).toBe(1)
+    expect(controller.getSnapshot().foraging).toEqual({ status: 'ready', view: LAYER, failure: null })
+  })
+
+  it('a documented close refreshes the foraging layer (a new GUT sample)', async () => {
+    let loads = 0
+    const closeEvent = {
+      id: 'ev-c1',
+      ts: '2026-08-27T08:10:00.000Z',
+      actor: { kind: 'user' as const, id: 'panel' },
+      action: 'knowledge.idea.failed',
+      refs: { ideaId: 'i2' },
+      payload: { reason: 'no effect' },
+    }
+    const controller = new ResearchController(stubRemote({
+      closeIdea: () => Promise.resolve(carried<ResearchCloseIdeaResult>({ ok: true, value: { event: closeEvent } })),
+      getWorktree: () => Promise.resolve(carried<ResearchGetWorktreeResult>({ ok: true, value: { worktree: TREE } })),
+      getForaging: () => {
+        loads += 1
+        return Promise.resolve(carried<ResearchGetForagingResult>({ ok: true, value: { foraging: LAYER } }))
+      },
+    }))
+    controller.ensureWorktree()
+    controller.ensureForaging()
+    await new Promise(resolve => { setTimeout(resolve, 0) })
+    const failure = await controller.closeIdea('i2', 'no effect')
+    expect(failure).toBeNull()
+    await new Promise(resolve => { setTimeout(resolve, 0) })
+    expect(loads).toBe(2)
   })
 })

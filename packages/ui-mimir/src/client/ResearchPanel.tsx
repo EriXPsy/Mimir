@@ -162,6 +162,7 @@ export function ResearchPanel({
   loadMeetings, generateMeetingDeck, deleteMeetingDeck, getImageGenConfig, saveImageGenConfig,
   loadLedger, generateReport, generateBrief, addJournal,
   ensureWorktree, refreshWorktree, setMainline, setIdeaParent, closeIdea,
+  ensureForaging, refreshForaging,
   exportWiki, importWiki, dismissToast, pruneToasts,
   toggleTheme, toggleLocale, t,
 }: ResearchPanelProps) {
@@ -198,6 +199,7 @@ export function ResearchPanel({
   const report = useResearch(view => view.report)
   const brief = useResearch(view => view.brief)
   const worktree = useResearch(view => view.worktree)
+  const foraging = useResearch(view => view.foraging)
   const toasts = useResearch(view => view.toasts)
   const backup = useResearch(view => view.backup)
   const paperJump = useResearch(view => view.paperJump)
@@ -629,6 +631,9 @@ export function ResearchPanel({
             setMainline={setMainline}
             setIdeaParent={setIdeaParent}
             closeIdea={closeIdea}
+            ensureForaging={ensureForaging}
+            refreshForaging={refreshForaging}
+            foraging={foraging}
             t={t}
           />
         )}

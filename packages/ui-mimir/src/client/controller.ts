@@ -34,7 +34,9 @@ import type {
   ResearchArxivSubscriptionsResult,
   ResearchAddJournalEntryResult,
   ResearchCloseIdeaResult,
+  ResearchGetForagingResult,
   ResearchGetWorktreeResult,
+  ResearchForagingView,
   ResearchSetIdeaParentResult,
   ResearchSetMainlineResult,
   ResearchWorktreeView,
@@ -303,6 +305,7 @@ export interface ResearchRemote {
     arousal?: number | undefined
     question?: ResearchJournalQuestionRef | undefined
   }) => Promise<RemoteResult<ResearchAddJournalEntryResult>>
+  getForaging: () => Promise<RemoteResult<ResearchGetForagingResult>>
   getWorktree: () => Promise<RemoteResult<ResearchGetWorktreeResult>>
   setMainline: (request: {
     ideaId?: string | undefined
@@ -523,6 +526,13 @@ export interface ResearchWorktreeSlice {
   readonly failure: ResearchFailureView | null
 }
 
+/** The foraging (S4) slice: the territory ledger + GUT baseline, cold until opened. */
+export interface ResearchForagingSlice {
+  readonly status: ResearchLoadStatus
+  readonly view: ResearchForagingView | null
+  readonly failure: ResearchFailureView | null
+}
+
 /** The selected project's `references.bib` view, edited entry-wise through the panel. */
 export interface ResearchBibView {
   readonly projectId: string
@@ -595,6 +605,8 @@ export interface ResearchView {
   readonly brief: ResearchBriefView
   /** The ledger view's worktree (S2): the process as branches, dead ends, and the mainline ref. */
   readonly worktree: ResearchWorktreeSlice
+  /** The ledger view's foraging layer (S4): territories, the GUT baseline, the GUT cards. */
+  readonly foraging: ResearchForagingSlice
   /** The corner toast queue (oldest first); the host component sweeps expiries. */
   readonly toasts: readonly ResearchToast[]
   /** Scheduled-backup status for the overview; null until loaded (or on failure). */
@@ -638,6 +650,7 @@ const INITIAL_VIEW: ResearchView = Object.freeze({
   report: Object.freeze({ status: 'idle', markdown: '', generatedAt: null, eventCount: null, failure: null }),
   brief: Object.freeze({ status: 'idle', markdown: '', generatedAt: null, eventCount: null, derivationVersion: null, recalibrated: false, questions: Object.freeze([]), failure: null }),
   worktree: Object.freeze({ status: 'cold', view: null, failure: null }),
+  foraging: Object.freeze({ status: 'cold', view: null, failure: null }),
   toasts: Object.freeze([]),
   backup: null,
   paperJump: null,
@@ -687,6 +700,8 @@ export class ResearchController implements HostObservable<ResearchView> {
   private briefGeneration = 0
   /** In-flight worktree load guard (the ensure/refresh contract). */
   private worktreePromise: Promise<void> | null = null
+  /** In-flight foraging load guard (the ensure/refresh contract). */
+  private foragingPromise: Promise<void> | null = null
   private figuresInFlight = false
   private meetingsGeneration = 0
   private meetingsInFlight = false
@@ -1070,6 +1085,54 @@ export class ResearchController implements HostObservable<ResearchView> {
     }
   }
 
+  /**
+   * Load the foraging (S4) slice: the territory ledger, the GUT baseline,
+   * and the GUT cards — the same publish contract as the worktree slice.
+   */
+  private async loadForaging(): Promise<void> {
+    this.publish({
+      foraging: Object.freeze({ status: 'loading', view: this.view.foraging.view, failure: null }),
+    })
+    try {
+      const carried = await this.remote.getForaging()
+      if (!carried.ok) {
+        const failure = failureOf(carried.error.code, carried.error.message)
+        this.publish({ foraging: Object.freeze({ status: 'error', view: null, failure }) })
+        return
+      }
+      const result = carried.value
+      if (!result.ok) {
+        const failure = businessFailure(result.error)
+        this.publish({ foraging: Object.freeze({ status: 'error', view: null, failure }) })
+        return
+      }
+      this.publish({
+        foraging: Object.freeze({ status: 'ready', view: result.value.foraging, failure: null }),
+      })
+    } catch (error) {
+      const failure = transportFailure(error)
+      this.publish({ foraging: Object.freeze({ status: 'error', view: null, failure }) })
+    }
+  }
+
+  /** Load the foraging layer once, on the ledger view's first open. */
+  ensureForaging(): void {
+    if (this.view.foraging.status === 'ready' || this.foragingPromise !== null) return
+    this.foragingPromise = this.loadForaging().finally(() => { this.foragingPromise = null })
+  }
+
+  /** Re-fetch the foraging layer (the card's refresh button). */
+  refreshForaging(): void {
+    if (this.foragingPromise !== null) return
+    this.foragingPromise = this.loadForaging().finally(() => { this.foragingPromise = null })
+  }
+
+  /** Refresh the foraging layer behind an in-flight guard (write paths). */
+  private requeueForaging(): void {
+    if (this.foragingPromise !== null) return
+    this.foragingPromise = this.loadForaging().finally(() => { this.foragingPromise = null })
+  }
+
   /** Load the worktree once, on the ledger view's first open. */
   ensureWorktree(): void {
     if (this.view.worktree.status === 'ready' || this.worktreePromise !== null) return
@@ -1155,6 +1218,8 @@ export class ResearchController implements HostObservable<ResearchView> {
       if (!result.ok) return businessFailure(result.error)
       this.notify('success', 'worktree.closed')
       this.requeueWorktree()
+      // A documented close is a new GUT sample — the baseline refreshes too.
+      this.requeueForaging()
       return null
     } catch (error) {
       return transportFailure(error)

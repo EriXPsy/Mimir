@@ -543,6 +543,14 @@ export interface ResearchPanelInjected {
    */
   closeIdea: (ideaId: string, reason: string) => Promise<ResearchFailureView | null>
   /**
+   * Load the foraging layer (S4) once, on the ledger view's first open.
+   */
+  ensureForaging: () => void
+  /**
+   * Re-fetch the foraging layer (the card's refresh button).
+   */
+  refreshForaging: () => void
+  /**
    * Export the whole wiki as one snapshot (the download button).
    * @returns the snapshot, or the settled failure view.
    */

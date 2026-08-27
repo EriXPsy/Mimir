@@ -322,6 +322,8 @@ function panelApply(ctx: ClientContext): void {
       setMainline: lineId => controller.setMainline(lineId),
       setIdeaParent: (ideaId, parentIdeaId) => controller.setIdeaParent(ideaId, parentIdeaId),
       closeIdea: (ideaId, reason) => controller.closeIdea(ideaId, reason),
+      ensureForaging: () => { controller.ensureForaging() },
+      refreshForaging: () => { controller.refreshForaging() },
       exportWiki: () => controller.exportWiki(),
       importWiki: (snapshot, mode, confirmReplace) => controller.importWiki(snapshot, mode, confirmReplace),
       dismissToast: (id) => { controller.dismissToast(id) },

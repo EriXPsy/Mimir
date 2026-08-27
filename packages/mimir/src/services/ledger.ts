@@ -20,6 +20,7 @@ import {
 import { deriveBrief, JOURNAL_ACTION, QUESTION_ANSWERED_ACTION, QUESTION_SHOWED_ACTION, renderBriefMarkdown, CBE_DERIVATION_VERSION } from '../cognitive-map.ts'
 import type { CbeBriefWindow, CbeWikiSnapshot } from '../cognitive-map.ts'
 import { evidenceModelAt, evidenceProfileOf } from '../cbe-engine.ts'
+import { deriveForaging } from '../foraging.ts'
 import {
   deriveWorktree,
   ideaParentEdges,
@@ -40,6 +41,7 @@ import type {
   ResearchGenerateBriefOptions,
   ResearchGenerateBriefResult,
   ResearchGetEvidenceProfileResult,
+  ResearchGetForagingResult,
   ResearchGetWorktreeResult,
   ResearchListEventsResult,
   ResearchProgressReportOptions,
@@ -386,6 +388,37 @@ export async function getEvidenceProfileRemote(deps: LedgerDeps): Promise<Resear
     })
   } catch {
     return rejected({ code: 'operation-failed', message: 'the evidence profile could not be folded' })
+  }
+}
+
+/**
+ * Read the foraging layer (S4): the territory ledger (one E0 row per
+ * declared project — events, attention mass, harvest-proxy counts, day
+ * gaps), the personal GUT baseline (silent below its floor), and the GUT
+ * cards' data — two numbers, zero verbs, no go/stay language. A pure
+ * query over the full ledger plus current wiki state; it writes nothing.
+ * @param deps - open wiki domain.
+ * @returns the derived, label-resolved foraging layer.
+ */
+export async function getForagingRemote(deps: LedgerDeps): Promise<ResearchGetForagingResult> {
+  try {
+    const events = await listEvents(deps.domain, { limit: LIST_EVENTS_MAX_LIMIT })
+    const wiki: CbeWikiSnapshot = {
+      ideas: [...deps.domain.table('ideas').entries()].map(([, record]) => record),
+      claims: [...deps.domain.table('claims').entries()].map(([, record]) => record),
+      projects: [...deps.domain.table('projects').entries()].map(([, record]) => record),
+    }
+    const layer = deriveForaging(events, wiki, Date.now())
+    return success({
+      foraging: {
+        derivedAt: layer.asOf,
+        territories: layer.territories,
+        baseline: layer.baseline,
+        cards: layer.cards,
+      },
+    })
+  } catch {
+    return rejected({ code: 'operation-failed', message: 'the foraging layer could not be derived' })
   }
 }
 

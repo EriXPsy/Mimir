@@ -24,6 +24,7 @@ import type {
   ResearchArxivSubscriptionsResult,
   ResearchCloseIdeaResult,
   ResearchGetEvidenceProfileResult,
+  ResearchGetForagingResult,
   ResearchGetWorktreeResult,
   ResearchSetIdeaParentResult,
   ResearchSetMainlineResult,
@@ -676,6 +677,12 @@ export class ResearchService extends TypertRemoteService {
   @Remote('getEvidenceProfile')
   getEvidenceProfile(): Promise<ResearchGetEvidenceProfileResult> {
     return ledger.getEvidenceProfileRemote(this.deps)
+  }
+
+  // foraging layer (S4): territory ledger + GUT baseline + cards (E0)
+  @Remote('getForaging')
+  getForaging(): Promise<ResearchGetForagingResult> {
+    return ledger.getForagingRemote(this.deps)
   }
 }
 
