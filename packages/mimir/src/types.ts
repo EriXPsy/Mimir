@@ -946,10 +946,12 @@ export type ResearchWorktreeLaneStatus = 'open' | 'failed' | 'adopted'
 /** How one touch reads on the branch graph's bead scale. */
 export type ResearchWorktreeTouchKind = 'create' | 'work' | 'meta' | 'terminal'
 
-/** One work node on a lane: a timestamp plus its bead class. */
+/** One work node on a lane: a timestamp, its bead class, and the action. */
 export interface ResearchWorktreeTouchView {
   readonly at: string
   readonly kind: ResearchWorktreeTouchKind
+  /** The ledger action name (labels resolve client-side). */
+  readonly action: string
 }
 
 /**

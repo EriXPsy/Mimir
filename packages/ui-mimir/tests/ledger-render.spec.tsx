@@ -49,9 +49,9 @@ const WORKTREE: ResearchWorktreeView = {
       firstSeen: iso(12), lastSeen: iso(0), eventCount: 3, drift: 1.9,
       closedAt: null, closeReason: null, gutDays: null, idleDays: 0,
       touches: [
-        { at: iso(12), kind: 'create' },
-        { at: iso(6), kind: 'work' },
-        { at: iso(0), kind: 'terminal' },
+        { at: iso(12), kind: 'create', action: 'knowledge.idea.added' },
+        { at: iso(6), kind: 'work', action: 'experiments.saved' },
+        { at: iso(0), kind: 'terminal', action: 'knowledge.idea.failed' },
       ],
     },
     {
@@ -60,9 +60,9 @@ const WORKTREE: ResearchWorktreeView = {
       firstSeen: iso(10), lastSeen: iso(2), eventCount: 2, drift: -0.8,
       closedAt: iso(0), closeReason: 'no measurable gain', gutDays: 2, idleDays: null,
       touches: [
-        { at: iso(10), kind: 'create' },
-        { at: iso(2), kind: 'work' },
-        { at: iso(0), kind: 'terminal' },
+        { at: iso(10), kind: 'create', action: 'knowledge.idea.added' },
+        { at: iso(2), kind: 'work', action: 'experiments.saved' },
+        { at: iso(0), kind: 'terminal', action: 'knowledge.idea.failed' },
       ],
     },
     {
@@ -71,8 +71,8 @@ const WORKTREE: ResearchWorktreeView = {
       firstSeen: iso(8), lastSeen: iso(3), eventCount: 2, drift: 0.9,
       closedAt: null, closeReason: null, gutDays: null, idleDays: null,
       touches: [
-        { at: iso(8), kind: 'create' },
-        { at: iso(4), kind: 'terminal' },
+        { at: iso(8), kind: 'create', action: 'knowledge.idea.added' },
+        { at: iso(4), kind: 'terminal', action: 'knowledge.idea.failed' },
       ],
     },
     {
@@ -80,7 +80,7 @@ const WORKTREE: ResearchWorktreeView = {
       parentLineId: null, parentLabel: null,
       firstSeen: iso(9), lastSeen: iso(1), eventCount: 5, drift: 2.2,
       closedAt: null, closeReason: null, gutDays: null, idleDays: 1,
-      touches: [{ at: iso(9), kind: 'create' }, { at: iso(1), kind: 'work' }],
+      touches: [{ at: iso(9), kind: 'create', action: 'knowledge.idea.added' }, { at: iso(1), kind: 'work', action: 'experiments.saved' }],
     },
   ],
   mainline: { lineId: 'i1', label: 'Chunk-graph reranking', declaredAt: iso(0) },
@@ -157,6 +157,9 @@ describe('LedgerView render smoke (S2 storyline + S4 foraging)', () => {
     expect(html.match(/<circle/g)?.length ?? 0).toBeGreaterThanOrEqual(8)
     expect(html).not.toContain('worktreeGraphLabel')
     expect(html).toContain('研究分支图')
+    // Bead titles carry localized action labels (hover info), not raw ids.
+    expect(html).toContain('新增想法')
+    expect(html).toContain('保存实验')
     expect(html).toContain('曲线=研究线')
     // An adopted lane reaches HTML with its merge glyph.
     expect(html).toContain('已并入（✓）')

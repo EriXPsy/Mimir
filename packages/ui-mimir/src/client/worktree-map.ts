@@ -66,6 +66,8 @@ export interface WorktreeFlowBead {
   readonly y: number
   readonly kind: ResearchWorktreeTouchKind
   readonly at: string
+  /** The action behind the bead's earliest touch (labels client-side). */
+  readonly action: string
   readonly count: number
   readonly color: string
 }
@@ -255,17 +257,20 @@ export function layoutWorktreeFlow(view: ResearchWorktreeView): WorktreeFlowLayo
   for (const entry of lanes) {
     const section = sectionOf.get(entry.lane.lineId)
     if (section === undefined) continue
-    const byCol = new Map<number, { at: string; kind: ResearchWorktreeTouchKind; count: number }>()
+    const byCol = new Map<number, { at: string; kind: ResearchWorktreeTouchKind; action: string; count: number }>()
     for (const touch of entry.lane.touches) {
       const col = colOf(touch.at)
       const slot = byCol.get(col)
       if (slot === undefined) {
-        byCol.set(col, { at: touch.at, kind: touch.kind, count: 1 })
+        byCol.set(col, { at: touch.at, kind: touch.kind, action: touch.action, count: 1 })
         continue
       }
       slot.count += 1
       if (BEAD_RANK[touch.kind] > BEAD_RANK[slot.kind]) slot.kind = touch.kind
-      if (touch.at < slot.at) slot.at = touch.at
+      if (touch.at < slot.at) {
+        slot.at = touch.at
+        slot.action = touch.action // the action stays paired with the earliest ts
+      }
     }
     for (const [col, slot] of byCol) {
       const x = Math.min(Math.max(xOf(col), section.xs), section.xe)
@@ -275,6 +280,7 @@ export function layoutWorktreeFlow(view: ResearchWorktreeView): WorktreeFlowLayo
         y: section.y,
         kind: slot.kind,
         at: slot.at,
+        action: slot.action,
         count: slot.count,
         color: entry.color,
       })

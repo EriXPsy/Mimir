@@ -17,6 +17,7 @@ import type { ResearchKey } from './locales.ts'
 import type { ResearchT } from './view-common.ts'
 import { closeReasonState, isIdeaLane, WORKTREE_REASON_MAX_CHARS } from './worktree-view.ts'
 import { beadRadius, layoutWorktreeFlow } from './worktree-map.ts'
+import type { WorktreeFlowBead } from './worktree-map.ts'
 import css from './ResearchPanel.module.css'
 
 /** Whole days, rounded for display (the wire carries r3 precision). */
@@ -38,9 +39,24 @@ function days(value: number): string {
  * @param props - the worktree view model and copy.
  * @returns the flow SVG block (or nothing before any lane exists).
  */
+/** The localized label of one ledger action (raw name when unmapped). */
+function actionText(action: string, t: ResearchT): string {
+  const key = `action.${action}` as Parameters<ResearchT>[0]
+  try {
+    const text = t(key)
+    if (typeof text === 'string' && text !== key) return text
+  } catch {
+    // unmapped action: the raw name is the honest fallback
+  }
+  return action
+}
+
 function WorktreeFlowStrip({ view, t }: { readonly view: ResearchWorktreeView; readonly t: ResearchT }) {
   const flow = layoutWorktreeFlow(view)
+  const [hovered, setHovered] = useState<WorktreeFlowBead | null>(null)
   if (flow.lanes.length === 0) return null
+  const labelOf = (lineId: string): string =>
+    view.lanes.find(lane => lane.lineId === lineId)?.label ?? lineId
   return (
     <div className={css.worktreeFlowBox} role="img" aria-label={t('worktree.graph')}>
       <svg viewBox={`0 0 ${String(flow.width)} ${String(flow.height)}`} preserveAspectRatio="xMidYMin meet">
@@ -82,8 +98,10 @@ function WorktreeFlowStrip({ view, t }: { readonly view: ResearchWorktreeView; r
                     : css.worktreeFlowBead
               }
               fill={bead.color}
+              onMouseEnter={() => { setHovered(bead) }}
+              onMouseLeave={() => { setHovered(null) }}
             >
-              <title>{`${bead.lineId} · ${bead.kind} × ${String(bead.count)} · ${bead.at.slice(0, 16).replace('T', ' ')}`}</title>
+              <title>{`${labelOf(bead.lineId)} · ${actionText(bead.action, t)}${bead.count > 1 ? ` × ${String(bead.count)}` : ''} · ${bead.at.slice(0, 16).replace('T', ' ')}`}</title>
             </circle>
           )
         })}
@@ -94,6 +112,23 @@ function WorktreeFlowStrip({ view, t }: { readonly view: ResearchWorktreeView; r
           <title>{view.derivedAt.slice(0, 16).replace('T', ' ')}</title>
         </line>
       </svg>
+        {hovered !== null && (
+          <div
+            className={css.worktreeFlowTip}
+            style={{
+              left: `${String((hovered.x / flow.width) * 100)}%`,
+              top: `${String((hovered.y / flow.height) * 100)}%`,
+            }}
+          >
+            <span className={css.worktreeFlowTipLane}>{labelOf(hovered.lineId)}</span>
+            <span className={css.worktreeFlowTipMeta}>
+              {actionText(hovered.action, t)}{hovered.count > 1 ? ` × ${String(hovered.count)}` : ''}
+            </span>
+            <span className={css.worktreeFlowTipMeta}>
+              {hovered.at.slice(0, 16).replace('T', ' ')}
+            </span>
+          </div>
+        )}
       <p className={css.worktreeFlowNote}>
         {t('worktree.graph.note')}
         {flow.momentCount > flow.cols

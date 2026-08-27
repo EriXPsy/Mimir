@@ -100,7 +100,11 @@ describe('layoutWorktreeFlow', () => {
       lane('main', 1, 20),
       lane('kid', 3, 18, {
         parentLineId: 'main',
-        touches: [{ at: iso(3), kind: 'create' }, { at: iso(10), kind: 'work' }, { at: iso(18), kind: 'terminal' }],
+        touches: [
+        { at: iso(3), kind: 'create', action: 'knowledge.idea.added' },
+        { at: iso(10), kind: 'work', action: 'experiments.saved' },
+        { at: iso(18), kind: 'terminal', action: 'knowledge.idea.failed' },
+      ],
       }),
     ]
     const flow = layoutWorktreeFlow(viewOf(lanes, 'main'))
@@ -116,7 +120,7 @@ describe('layoutWorktreeFlow', () => {
   it('folds long histories into the column budget', () => {
     const touches = []
     for (let day = 0; day <= 200; day += 2) {
-      touches.push({ at: iso(day), kind: 'work' as const })
+      touches.push({ at: iso(day), kind: 'work' as const, action: 'experiments.saved' })
     }
     const lanes = [lane('busy', 0, 200, { touches })]
     const flow = layoutWorktreeFlow(viewOf(lanes))
