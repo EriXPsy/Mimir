@@ -1,0 +1,185 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 960 560" role="img" aria-label="认知简报藏宝图 · 概念示意">
+  <!-- ══════ 概念示意（非真实数据）：Mimir 认知简报 = 藏宝图 ══════
+       设计语言：老羊皮纸 / 雕刻双线 / 手绘抖动 / 赭石虚线路线 / 罗盘玫瑰 / 图框图例
+       语义：河流=研究线（主线=干流），虚线尾+暗礁X=有据的No，宝箱=并入，
+       灯塔=已证实断言，雾块=宣告未开垦，漂流瓶=手记，珠子=工作节点 -->
+  <defs>
+    <radialGradient id="parch" cx="0.5" cy="0.42" r="0.78">
+      <stop offset="0" stop-color="#f4ead6"/>
+      <stop offset="0.55" stop-color="#ecdfc4"/>
+      <stop offset="0.85" stop-color="#ddc9a5"/>
+      <stop offset="1" stop-color="#cbb48c"/>
+    </radialGradient>
+    <filter id="grain">
+      <feTurbulence type="fractalNoise" baseFrequency="0.9" numOctaves="2" seed="7" result="n"/>
+      <feColorMatrix in="n" type="matrix" values="0 0 0 0 0.42  0 0 0 0 0.33  0 0 0 0 0.22  0 0 0 0.05 0"/>
+    </filter>
+    <filter id="wobble">
+      <feTurbulence type="fractalNoise" baseFrequency="0.018" numOctaves="2" seed="3" result="n"/>
+      <feDisplacementMap in="SourceGraphic" in2="n" scale="7"/>
+    </filter>
+  </defs>
+
+  <!-- 羊皮纸底 -->
+  <rect width="960" height="560" fill="url(#parch)"/>
+  <rect width="960" height="560" filter="url(#grain)" opacity="0.55"/>
+
+  <!-- 图框（双线 + 角饰） -->
+  <rect x="14" y="14" width="932" height="532" fill="none" stroke="#463527" stroke-width="3"/>
+  <rect x="22" y="22" width="916" height="516" fill="none" stroke="#463527" stroke-width="1" opacity="0.55"/>
+  <g fill="#463527">
+    <rect x="10" y="10" width="9" height="9" transform="rotate(45 14.5 14.5)"/>
+    <rect x="941" y="10" width="9" height="9" transform="rotate(45 945.5 14.5)"/>
+    <rect x="10" y="541" width="9" height="9" transform="rotate(45 14.5 545.5)"/>
+    <rect x="941" y="541" width="9" height="9" transform="rotate(45 945.5 545.5)"/>
+  </g>
+
+  <!-- 岛屿：研究领地（手绘抖动海岸） -->
+  <path d="M 70 300 Q 160 130 400 120 Q 690 100 880 240 Q 900 380 660 440 Q 360 500 170 430 Q 40 380 70 300 Z"
+        fill="#e7d9bd" stroke="#a3835d" stroke-width="4" stroke-linejoin="round" filter="url(#wobble)"/>
+  <!-- 海岸阴影排线 -->
+  <g stroke="#a3835d" stroke-width="1" opacity="0.45">
+    <path d="M 762 262 l 16 -10"/><path d="M 778 286 l 17 -8"/><path d="M 790 312 l 17 -6"/>
+    <path d="M 795 340 l 17 -3"/><path d="M 793 368 l 17 0"/><path d="M 784 396 l 16 4"/>
+    <path d="M 122 348 l -15 9"/><path d="M 130 374 l -15 6"/><path d="M 144 398 l -14 4"/>
+  </g>
+
+  <!-- 河流系统（雕刻双线：墨晕 + 水色芯） -->
+  <g fill="none" stroke-linecap="round">
+    <!-- 干流 = 主线 -->
+    <path d="M 120 320 C 260 330 420 316 600 322 C 720 326 800 318 872 314" stroke="#463527" stroke-width="17" opacity="0.16"/>
+    <path d="M 120 320 C 260 330 420 316 600 322 C 720 326 800 318 872 314" stroke="#7d97a2" stroke-width="12"/>
+    <!-- 支流A（上）= 并入：荡出 → 汇流 -->
+    <path d="M 265 322 C 300 300 330 220 380 190 C 480 130 580 168 648 296 Q 658 314 668 320" stroke="#463527" stroke-width="11" opacity="0.16"/>
+    <path d="M 265 322 C 300 300 330 220 380 190 C 480 130 580 168 648 296 Q 658 314 668 320" stroke="#8fa7ae" stroke-width="7.5"/>
+    <!-- 支流B（下）= 死巷：荡出 → 干涸尾 -->
+    <path d="M 355 325 C 390 350 430 390 480 408 C 540 428 600 420 640 402" stroke="#463527" stroke-width="11" opacity="0.16"/>
+    <path d="M 355 325 C 390 350 430 390 480 408 C 540 428 600 420 640 402" stroke="#94a892" stroke-width="7.5"/>
+    <path d="M 640 402 C 668 393 690 387 712 380" stroke="#8a7458" stroke-width="4" stroke-dasharray="2 10" opacity="0.85"/>
+    <!-- 支流B子流 = 二级死巷 -->
+    <path d="M 480 408 C 505 432 520 458 530 478" stroke="#463527" stroke-width="8" opacity="0.14"/>
+    <path d="M 480 408 C 505 432 520 458 530 478" stroke="#a39a83" stroke-width="5"/>
+    <path d="M 530 478 L 548 496" stroke="#8a7458" stroke-width="3.5" stroke-dasharray="2 9" opacity="0.8"/>
+  </g>
+
+  <!-- 主线宣告 = 赭石虚线路线（reflog） -->
+  <path d="M 120 320 C 260 330 420 316 600 322 C 720 326 800 318 872 314"
+        fill="none" stroke="#b4713e" stroke-width="3" stroke-dasharray="11 9" stroke-linecap="round" opacity="0.9"/>
+
+  <!-- 工作节点珠子（纸底 + 墨圈 + 线色芯） -->
+  <g stroke="#463527" stroke-width="1.5">
+    <circle cx="180" cy="321" r="5.5" fill="#f4ead6"/><circle cx="180" cy="321" r="2.4" fill="#7d97a2" stroke="none"/>
+    <circle cx="330" cy="322" r="7"   fill="#f4ead6"/><circle cx="330" cy="322" r="3"   fill="#7d97a2" stroke="none"/>
+    <circle cx="470" cy="319" r="5.5" fill="#f4ead6"/><circle cx="470" cy="319" r="2.4" fill="#7d97a2" stroke="none"/>
+    <circle cx="640" cy="321" r="7.5" fill="#f4ead6"/><circle cx="640" cy="321" r="3.2" fill="#7d97a2" stroke="none"/>
+    <circle cx="800" cy="318" r="5.5" fill="#f4ead6"/><circle cx="800" cy="318" r="2.4" fill="#7d97a2" stroke="none"/>
+    <circle cx="308" cy="274" r="5.5" fill="#f4ead6"/><circle cx="308" cy="274" r="2.4" fill="#8fa7ae" stroke="none"/>
+    <circle cx="430" cy="166" r="7"   fill="#f4ead6"/><circle cx="430" cy="166" r="3"   fill="#8fa7ae" stroke="none"/>
+    <circle cx="560" cy="216" r="5.5" fill="#f4ead6"/><circle cx="560" cy="216" r="2.4" fill="#8fa7ae" stroke="none"/>
+    <circle cx="420" cy="368" r="5.5" fill="#f4ead6"/><circle cx="420" cy="368" r="2.4" fill="#94a892" stroke="none"/>
+    <circle cx="565" cy="420" r="7"   fill="#f4ead6"/><circle cx="565" cy="420" r="3"   fill="#94a892" stroke="none"/>
+    <circle cx="505" cy="445" r="5"   fill="#f4ead6"/><circle cx="505" cy="445" r="2.2" fill="#a39a83" stroke="none"/>
+  </g>
+
+  <!-- 宝箱 = 并入（汇流处，打开的箱盖 + 收获刻线） -->
+  <g transform="translate(672,318)">
+    <path d="M -14 -2 Q 0 -20 14 -2" fill="#b9854f" stroke="#463527" stroke-width="2"/>
+    <rect x="-14" y="-2" width="28" height="15" rx="2.5" fill="#a5713f" stroke="#463527" stroke-width="2"/>
+    <path d="M -6 -2 v 15 M 6 -2 v 15" stroke="#463527" stroke-width="1" opacity="0.5"/>
+    <circle cx="0" cy="5" r="2.6" fill="#463527"/>
+    <path d="M -20 -22 l -4 -5 M 0 -26 l 0 -6 M 20 -22 l 4 -5" stroke="#b4713e" stroke-width="1.6" stroke-linecap="round" opacity="0.85"/>
+  </g>
+
+  <!-- 暗礁 ✕ = 有据的 No（两处，附草叶） -->
+  <g stroke="#a2573f" stroke-width="4.5" stroke-linecap="round">
+    <path d="M 718 370 l 15 15 M 733 370 l -15 15"/>
+    <path d="M 549 493 l 13 13 M 562 493 l -13 13"/>
+  </g>
+  <g stroke="#8a7458" stroke-width="1.4" stroke-linecap="round" opacity="0.8">
+    <path d="M 741 352 q 4 -8 10 -9 M 745 356 q 6 -5 12 -4"/>
+    <path d="M 543 476 q 4 -7 9 -8"/>
+  </g>
+
+  <!-- 灯塔 = 已证实断言（条纹塔身 + 灯室 + 刻线光） -->
+  <g transform="translate(790,178)">
+    <path d="M -9 26 L -6 -14 L 6 -14 L 9 26 Z" fill="#f0e2c8" stroke="#463527" stroke-width="2"/>
+    <path d="M -7.6 6 h 15.2 M -6.8 -4 h 13.6" stroke="#463527" stroke-width="1.4" opacity="0.6"/>
+    <rect x="-7" y="-22" width="14" height="8" rx="2" fill="#b4713e" stroke="#463527" stroke-width="1.8"/>
+    <path d="M 0 -22 v -5 M -9 -27 l -7 -5 M 9 -27 l 7 -5" stroke="#b4713e" stroke-width="1.6" stroke-linecap="round"/>
+  </g>
+
+  <!-- 雾块 = 宣告未开垦 -->
+  <g fill="#f7f0e0" stroke="#9a8a6f" stroke-width="1.6" stroke-dasharray="5 6" opacity="0.9">
+    <path d="M 585 78 q 14 -12 34 -6 q 20 -12 38 0 q 18 -6 28 8 q 4 12 -10 16 q -22 8 -46 2 q -26 6 -40 -4 q -12 -8 -4 -16 Z"/>
+    <path d="M 682 112 q 12 -10 30 -4 q 16 -8 30 2 q 10 8 0 14 q -18 6 -36 2 q -20 4 -26 -4 q -6 -6 2 -10 Z"/>
+  </g>
+
+  <!-- 漂流瓶 = 手记（锚定发生时刻） -->
+  <g transform="translate(408,300) rotate(-18)">
+    <rect x="-7" y="-4" width="14" height="9" rx="4" fill="#cfe0d8" stroke="#5c7a6b" stroke-width="1.8"/>
+    <rect x="-2.4" y="-8" width="4.8" height="4.5" rx="1.5" fill="#cfe0d8" stroke="#5c7a6b" stroke-width="1.5"/>
+    <rect x="-1.8" y="-11" width="3.6" height="3" rx="1" fill="#b39778" stroke="#5c7a6b" stroke-width="1.2"/>
+  </g>
+
+  <!-- 当下线 -->
+  <path d="M 872 96 v 408" stroke="#463527" stroke-width="1.6" stroke-dasharray="3 9" opacity="0.45"/>
+
+  <!-- 题匾 -->
+  <g>
+    <rect x="42" y="42" width="216" height="66" rx="10" fill="#f7efdd" stroke="#463527" stroke-width="2.2"/>
+    <rect x="48" y="48" width="204" height="54" rx="7" fill="none" stroke="#a3835d" stroke-width="1"/>
+    <text x="150" y="76" text-anchor="middle" font-family="Georgia, 'Songti SC', 'Noto Serif SC', serif"
+          font-size="22" letter-spacing="8" fill="#463527">研究探索图</text>
+    <text x="150" y="94" text-anchor="middle" font-family="Georgia, 'Songti SC', serif"
+          font-size="10" letter-spacing="2.5" fill="#7a6448">长上下文检索 · 压缩时间 · 非等钟表</text>
+  </g>
+
+  <!-- 罗盘玫瑰 = 主线宣告史（reflog 转向） -->
+  <g transform="translate(868,472)">
+    <circle r="40" fill="#f2e7d0" stroke="#463527" stroke-width="2.4"/>
+    <circle r="31" fill="none" stroke="#463527" stroke-width="0.9" opacity="0.6"/>
+    <g fill="#8a6f4f">
+      <path d="M 0 -27 L 5 0 L 0 27 L -5 0 Z" transform="rotate(45)"/>
+      <path d="M 0 -27 L 5 0 L 0 27 L -5 0 Z" transform="rotate(135)"/>
+    </g>
+    <path d="M 0 -36 L 6.5 0 L 0 36 L -6.5 0 Z" fill="#f2e7d0" stroke="#463527" stroke-width="1.6"/>
+    <path d="M 0 -36 L 6.5 0 L 0 0 Z" fill="#463527"/>
+    <path d="M 0 36 L -6.5 0 L 0 0 Z" fill="#463527"/>
+    <path d="M -36 0 L 0 -6.5 L 36 0 L 0 6.5 Z" fill="#f2e7d0" stroke="#463527" stroke-width="1.6" transform="rotate(8)"/>
+    <circle r="4.5" fill="#463527"/>
+    <text x="0" y="-46" text-anchor="middle" font-family="Georgia, serif" font-size="12" fill="#463527">N</text>
+  </g>
+
+  <!-- 图例（两行） -->
+  <g font-family="Georgia, 'Songti SC', serif" font-size="11.5" letter-spacing="1" fill="#463527">
+    <g transform="translate(44,452)">
+      <path d="M 0 0 h 26" stroke="#b4713e" stroke-width="3" stroke-dasharray="9 7" stroke-linecap="round"/>
+      <text x="34" y="4">主线宣告</text>
+      <path d="M 108 0 h 26" stroke="#7d97a2" stroke-width="7" stroke-linecap="round"/>
+      <text x="142" y="4">研究线（河流）</text>
+      <path d="M 258 0 h 24" stroke="#8a7458" stroke-width="3.5" stroke-dasharray="2 8" stroke-linecap="round"/>
+      <text x="290" y="4">干涸尾（有据的 No）</text>
+      <path d="M 436 -6 l 11 11 M 447 -6 l -11 11" stroke="#a2573f" stroke-width="3.6" stroke-linecap="round"/>
+      <text x="456" y="4">暗礁（死巷教训）</text>
+    </g>
+    <g transform="translate(44,486)">
+      <rect x="-1" y="-8" width="22" height="12" rx="2" fill="#a5713f" stroke="#463527" stroke-width="1.6"/>
+      <path d="M -2 -7 Q 10 -17 22 -7" fill="none" stroke="#463527" stroke-width="1.6"/>
+      <text x="30" y="4">宝箱（并入收获）</text>
+      <rect x="126" y="-12" width="9" height="16" fill="#f0e2c8" stroke="#463527" stroke-width="1.5"/>
+      <path d="M 124.5 -12 h 12" stroke="#463527" stroke-width="1.5"/>
+      <text x="144" y="4">灯塔（已证实断言）</text>
+      <path d="M 288 -10 q 10 -8 24 -2 q 12 -6 22 2 q 7 6 -2 10 q -16 5 -30 1 q -14 4 -20 -3 q -5 -5 6 -8 Z"
+            fill="#f7f0e0" stroke="#9a8a6f" stroke-width="1.3" stroke-dasharray="4 5"/>
+      <text x="320" y="4">雾（宣告未开垦）</text>
+      <rect x="436" y="-7" width="10" height="7" rx="3" fill="#cfe0d8" stroke="#5c7a6b" stroke-width="1.4"/>
+      <text x="454" y="4">漂流瓶（手记）</text>
+    </g>
+    <!-- 比例尺 -->
+    <g transform="translate(44,522)" stroke="#463527">
+      <path d="M 0 0 h 96" stroke-width="1.6"/>
+      <path d="M 0 -4 v 8 M 24 -3 v 6 M 48 -4 v 8 M 72 -3 v 6 M 96 -4 v 8" stroke-width="1.3"/>
+      <text x="106" y="4" stroke="none" font-size="10.5" letter-spacing="1.5" fill="#7a6448">压缩时间（每格≈一批事件）</text>
+    </g>
+  </g>
+</svg>
