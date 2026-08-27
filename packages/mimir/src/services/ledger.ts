@@ -22,6 +22,7 @@ import type {
   EventRefs,
   LedgerActorKind,
   ResearchAddJournalEntryResult,
+  ResearchBriefQuestion,
   ResearchGenerateBriefOptions,
   ResearchGenerateBriefResult,
   ResearchListEventsResult,
@@ -142,14 +143,16 @@ export async function generateProgressReportRemote(
  * Render the COGNITIVE BRIEF (the DDM-lite roadbook) of one window: the
  * lines' drift states, the eureka candidates, the status transitions, the
  * open loops, the boundary questions — and, between the loops and the
- * questions, the user's own L2 journal lines. Omitted bounds open into the
- * full history (`since` = epoch, `until` = now); an unknown project id is
- * `project-not-found`; an unparseable bound is `invalid-input`. The brief is
- * a pure query — it writes nothing (the L2 write path is
- * {@link addJournalEntryRemote}).
+ * questions, the user's own L2 journal lines. The boundary questions also
+ * travel as structured, label-resolved rows ({@link ResearchBriefQuestion})
+ * so the view can render them as interactive confirmation cards. Omitted
+ * bounds open into the full history (`since` = epoch, `until` = now); an
+ * unknown project id is `project-not-found`; an unparseable bound is
+ * `invalid-input`. The brief is a pure query — it writes nothing (the L2
+ * write path is {@link addJournalEntryRemote}).
  * @param deps - open wiki domain.
  * @param request - the optional scope and bounds.
- * @returns the Markdown brief plus the event count it covered.
+ * @returns the Markdown brief, its interactive questions, and the event count.
  */
 export async function generateBriefRemote(
   deps: LedgerDeps,
@@ -190,6 +193,7 @@ export async function generateBriefRemote(
       markdown: renderBriefMarkdown(brief),
       generatedAt: new Date().toISOString(),
       eventCount: events.length,
+      questions: briefQuestions(brief, wiki),
     })
   } catch (error) {
     return rejected({
@@ -210,6 +214,25 @@ function moodRating(value: number | undefined, name: string): Record<string, num
     throw new RangeError(`${name} must be an integer between 1 and 5`)
   }
   return { [name]: value }
+}
+
+/**
+ * Label-resolve the brief's boundary questions for the view: idea/project
+ * ids become titles (the local landmark names), a pending claim becomes a
+ * 48-char excerpt of its own text. Unresolvable ids pass through verbatim —
+ * the card still names a line, never a blank.
+ */
+function briefQuestions(brief: ReturnType<typeof deriveBrief>, wiki: CbeWikiSnapshot): readonly ResearchBriefQuestion[] {
+  const labels = new Map<string, string>([
+    ...wiki.ideas.map(idea => [idea.id, idea.title] as const),
+    ...wiki.projects.map(project => [`project:${project.id}`, project.title] as const),
+    ...wiki.claims.map(claim => [claim.id, claim.text.length > 48 ? `${claim.text.slice(0, 47)}…` : claim.text] as const),
+  ])
+  return Object.freeze(brief.questions.map(question => Object.freeze({
+    kind: question.kind,
+    lineId: question.lineId,
+    label: labels.get(question.lineId) ?? question.lineId,
+  })))
 }
 
 /**

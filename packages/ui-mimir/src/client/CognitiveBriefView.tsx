@@ -1,16 +1,16 @@
 /**
  * The cognitive brief (CBE) card of the ledger view: the DDM-lite roadbook
  * of the selected window — rendered as a printed sheet, downloadable as
- * Markdown — with the L2 journal box beneath it, the one place the user
- * writes their own words onto the map (read back by the brief, never weighed
- * as evidence). All reads and writes flow through the injected controller
- * verbs; this component owns only the draft state and the copy/download
- * actions.
+ * Markdown — its boundary questions as interactive confirmation cards, and
+ * the L2 journal box beneath them, the one place the user writes their own
+ * words onto the map (read back by the brief, never weighed as evidence).
+ * All reads and writes flow through the injected controller verbs; this
+ * component owns only the draft state and the copy/download actions.
  * @module dsh-client-ui-mimir/client/CognitiveBriefView
  */
 
 import { useState } from 'react'
-import type { ResearchGenerateBriefOptions } from 'dsh-mimir/types'
+import type { ResearchBriefQuestion, ResearchGenerateBriefOptions } from 'dsh-mimir/types'
 import type { ResearchBriefView, ResearchFailureView } from './controller.ts'
 import type { ResearchT } from './view-common.ts'
 import { renderMarkdown } from './MarkdownView.tsx'
@@ -45,8 +45,24 @@ export function CognitiveBriefView({
   // Self-reported mood ratings (1–5), null = the user chose not to tag one.
   const [valence, setValence] = useState<number | null>(null)
   const [arousal, setArousal] = useState<number | null>(null)
+  // The line a boundary-question answer is being written against, or null.
+  const [activeIdeaId, setActiveIdeaId] = useState<string | null>(null)
 
   const state = journalTextState(draft)
+
+  /**
+   * Answer one boundary question: prefill the journal box against the
+   * question's line (the No/Yes the user prunes the possibility space
+   * with), as an editable draft — the ruling lands as an L2 journal event
+   * the agent and the next brief can both read.
+   */
+  const onAnswer = (question: ResearchBriefQuestion): void => {
+    setActiveIdeaId(
+      question.kind === 'returning-branch' && !question.lineId.startsWith('project:') ? question.lineId : null,
+    )
+    setDraft(t('journal.ruling.template', { line: question.label }))
+    setJournalError(null)
+  }
 
   const onGenerate = async (): Promise<void> => {
     if (brief.status === 'loading') return
@@ -83,6 +99,7 @@ export function CognitiveBriefView({
     if (state !== 'ok' || writing) return
     setWriting(true)
     const failure = await addJournal(draft, scopedProjectId, {
+      ...(activeIdeaId === null ? {} : { ideaId: activeIdeaId }),
       ...(valence === null ? {} : { valence }),
       ...(arousal === null ? {} : { arousal }),
     })
@@ -94,6 +111,7 @@ export function CognitiveBriefView({
     setDraft('')
     setValence(null)
     setArousal(null)
+    setActiveIdeaId(null)
     setJournalError(null)
     refreshLedger()
     if (brief.status === 'ready') {
@@ -152,12 +170,30 @@ export function CognitiveBriefView({
         </div>
       )}
 
+      {/* The boundary confirmation cards: the agent's questions, the user's
+          No/Yes rulings — each answer lands as an L2 journal line. */}
+      {brief.status === 'ready' && brief.questions.length > 0 && (
+        <div className={css.questionList}>
+          {brief.questions.map(question => (
+            <div key={`${question.kind}:${question.lineId}`} className={css.questionCard}>
+              <span className={css.questionKind}>{t(`brief.question.${question.kind}`)}</span>
+              <span className={css.questionLine}>{question.label}</span>
+              <button type="button" className={css.btn} onClick={() => { onAnswer(question) }}>
+                {t('journal.answer')}
+              </button>
+            </div>
+          ))}
+        </div>
+      )}
+
       {/* The L2 write box: the map's only pen belongs to the user. */}
       <div className={css.journalBox}>
         <div className={css.journalHead}>
           <label className={css.reportCardTitle} htmlFor="mimir-journal-text">{t('journal.title')}</label>
           <span className={css.journalScope}>
-            {scopedProjectId !== null ? t('journal.scope.project') : t('journal.scope.all')}
+            {activeIdeaId !== null
+              ? `${t('journal.scope.line')} ${activeIdeaId}`
+              : scopedProjectId !== null ? t('journal.scope.project') : t('journal.scope.all')}
           </span>
         </div>
         <textarea

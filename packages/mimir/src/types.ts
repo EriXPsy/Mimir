@@ -903,11 +903,24 @@ export interface ResearchGenerateBriefOptions {
   readonly until?: string | undefined
 }
 
-/** `generateBrief` result: the rendered cognitive-brief Markdown. */
+/**
+ * One interactive boundary question of the brief, label-resolved for the
+ * view: the engine's abstract `CbeBoundaryQuestion` joined with the wiki
+ * records so the card can name the line it asks about.
+ */
+export interface ResearchBriefQuestion {
+  readonly kind: 'returning-branch' | 'pending-claim'
+  readonly lineId: string
+  /** The line's human label (idea/project title, or a claim-text excerpt). */
+  readonly label: string
+}
+
+/** `generateBrief` result: the rendered brief plus its interactive questions. */
 export type ResearchGenerateBriefResult = ResearchResult<{
   readonly markdown: string
   readonly generatedAt: string
   readonly eventCount: number
+  readonly questions: readonly ResearchBriefQuestion[]
 }>
 
 /** `addJournalEntry` result: the stored journal event (the L2 write). */

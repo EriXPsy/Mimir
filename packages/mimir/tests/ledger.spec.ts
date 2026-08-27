@@ -515,6 +515,57 @@ describe('cognitive beidou remotes (CBE service wiring)', () => {
     await expect(service.generateBrief({ projectId: 'ghost' }))
       .resolves.toMatchObject({ ok: false, error: { code: 'project-not-found' } })
   })
+
+  it('generateBrief surfaces structured boundary questions with labels', async () => {
+    const { domain, service } = await serviceHarness()
+    await domain.table('projects').put(PROJECT.id, PROJECT)
+    await domain.table('ideas').put('idea-r', {
+      id: 'idea-r',
+      title: 'Side road idea',
+      hypothesis: 'A persistent side road.',
+      status: 'active',
+      createdAt: new Date(Date.now() - 7 * 86_400_000).toISOString(),
+    })
+    await domain.table('claims').put('c9', {
+      id: 'c9',
+      text: '这个断言的文本写得足够长，长到明显超过四十八个字符的上限，从而必须被截断成一个较短的摘要，才能放进那张边界确认卡片里。',
+      status: 'pending',
+      evidence: '—',
+    })
+    const now = Date.now()
+    // A returning-side line: +1.5 / −1.5 / +1.5 across three far-apart days.
+    await appendEvent(domain, {
+      actor: WIKI_AGENT_ACTOR,
+      action: 'experiments.saved',
+      refs: { ideaId: 'idea-r', projectId: PROJECT.id },
+      payload: { name: 'r1', created: true },
+      now: new Date(now - 5 * 86_400_000),
+    })
+    await appendEvent(domain, {
+      actor: WIKI_AGENT_ACTOR,
+      action: 'experiments.deleted',
+      refs: { ideaId: 'idea-r', projectId: PROJECT.id },
+      payload: { name: 'r1', destructive: true },
+      now: new Date(now - 3 * 86_400_000),
+    })
+    await appendEvent(domain, {
+      actor: WIKI_AGENT_ACTOR,
+      action: 'experiments.saved',
+      refs: { ideaId: 'idea-r', projectId: PROJECT.id },
+      payload: { name: 'r2', created: true },
+      now: new Date(now - 1 * 86_400_000),
+    })
+    const brief = await service.generateBrief({ projectId: PROJECT.id })
+    expect(brief.ok).toBe(true)
+    if (!brief.ok) throw new Error('unreachable')
+    const questions = brief.value.questions
+    const branch = questions.find(question => question.kind === 'returning-branch')
+    expect(branch).toEqual({ kind: 'returning-branch', lineId: 'idea-r', label: 'Side road idea' })
+    const pending = questions.find(question => question.kind === 'pending-claim')
+    expect(pending?.lineId).toBe('c9')
+    expect(pending?.label.endsWith('…')).toBe(true)
+    expect(pending?.label.length).toBeLessThanOrEqual(48)
+  })
 })
 
 describe('wiki_note ledger wiring (agent actor)', () => {

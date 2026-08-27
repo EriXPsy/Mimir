@@ -3857,6 +3857,40 @@ li.dropIndicator {
   font-weight: 600;
 }
 
+/* The boundary confirmation cards: one question row per card — the agent
+   asks, the user's answer lands as an L2 journal line. */
+.questionList {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-top: 14px;
+}
+
+.questionCard {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 12px;
+  border: 1px solid var(--mimir-line-soft);
+  border-radius: 10px;
+}
+
+.questionKind {
+  flex-shrink: 0;
+  color: var(--dsw-alias-label-tertiary, #857d6c);
+  font-size: 11px;
+}
+
+.questionLine {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--dsw-alias-label-primary, #211e19);
+  font-size: 12.5px;
+}
+
 /* The L2 journal box: a dashed enclosure under the brief's sheet — the one
    place the user writes their own words onto the map. */
 .journalBox {

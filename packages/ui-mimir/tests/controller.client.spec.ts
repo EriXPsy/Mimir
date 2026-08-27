@@ -1832,7 +1832,12 @@ describe('ResearchController cognitive brief (CBE)', () => {
     const controller = new ResearchController(stubRemote({
       generateBrief: () => Promise.resolve(carried<ResearchGenerateBriefResult>({
         ok: true,
-        value: { markdown: '# Cognitive Brief', generatedAt: '2026-08-27T06:00:00.000Z', eventCount: 4 },
+        value: {
+          markdown: '# Cognitive Brief',
+          generatedAt: '2026-08-27T06:00:00.000Z',
+          eventCount: 4,
+          questions: [{ kind: 'pending-claim', lineId: 'c9', label: 'delta transfers' }],
+        },
       })),
     }))
     const failure = await controller.generateBrief({ projectId: 'p1' })
@@ -1842,6 +1847,7 @@ describe('ResearchController cognitive brief (CBE)', () => {
       markdown: '# Cognitive Brief',
       generatedAt: '2026-08-27T06:00:00.000Z',
       eventCount: 4,
+      questions: [{ kind: 'pending-claim', lineId: 'c9', label: 'delta transfers' }],
       failure: null,
     })
     expect(controller.getSnapshot().toasts).toHaveLength(1)
@@ -1890,6 +1896,21 @@ describe('ResearchController cognitive brief (CBE)', () => {
     // exactOptionalPropertyTypes: the absent scope must not cross as `undefined`.
     expect(seen).toEqual([{ text: '不限项目的一句' }])
     expect(Object.prototype.hasOwnProperty.call(seen[0], 'projectId')).toBe(false)
+  })
+
+  it('addJournal forwards a line ref and mood ratings, absent keys omitted', async () => {
+    const seen: unknown[] = []
+    const controller = new ResearchController(stubRemote({
+      addJournalEntry: (request) => {
+        seen.push(request)
+        return Promise.resolve(carried<ResearchAddJournalEntryResult>({ ok: true, value: { event: JOURNAL_EVENT } }))
+      },
+    }))
+    const failure = await controller.addJournal('留着这条线', null, { ideaId: 'idea-r', valence: 4 })
+    expect(failure).toBeNull()
+    expect(seen).toEqual([{ text: '留着这条线', ideaId: 'idea-r', valence: 4 }])
+    expect(Object.prototype.hasOwnProperty.call(seen[0], 'projectId')).toBe(false)
+    expect(Object.prototype.hasOwnProperty.call(seen[0], 'arousal')).toBe(false)
   })
 
   it('addJournal returns the failure view inline and stays quiet', async () => {

@@ -32,6 +32,7 @@ import type {
   ResearchArtifactResult,
   ResearchArxivSubscriptionsResult,
   ResearchAddJournalEntryResult,
+  ResearchBriefQuestion,
   ResearchBackupStatusView,
   ResearchBibliographyResult,
   ResearchCheckArxivSubscriptionsResult,
@@ -485,6 +486,8 @@ export interface ResearchBriefView {
   readonly markdown: string
   readonly generatedAt: string | null
   readonly eventCount: number | null
+  /** Label-resolved boundary questions (the confirmation cards' data). */
+  readonly questions: readonly ResearchBriefQuestion[]
   readonly failure: ResearchFailureView | null
 }
 
@@ -599,7 +602,7 @@ const INITIAL_VIEW: ResearchView = Object.freeze({
   venueTemplates: Object.freeze({ status: 'cold', list: Object.freeze([]), failure: null }),
   ledger: Object.freeze({ status: 'cold', list: Object.freeze([]), failure: null }),
   report: Object.freeze({ status: 'idle', markdown: '', generatedAt: null, eventCount: null, failure: null }),
-  brief: Object.freeze({ status: 'idle', markdown: '', generatedAt: null, eventCount: null, failure: null }),
+  brief: Object.freeze({ status: 'idle', markdown: '', generatedAt: null, eventCount: null, questions: Object.freeze([]), failure: null }),
   toasts: Object.freeze([]),
   backup: null,
   paperJump: null,
@@ -893,7 +896,14 @@ export class ResearchController implements HostObservable<ResearchView> {
     this.briefGeneration += 1
     const generation = this.briefGeneration
     this.publish({
-      brief: Object.freeze({ status: 'loading', markdown: '', generatedAt: null, eventCount: null, failure: null }),
+      brief: Object.freeze({
+        status: 'loading',
+        markdown: '',
+        generatedAt: null,
+        eventCount: null,
+        questions: Object.freeze([]),
+        failure: null,
+      }),
     })
     try {
       const carried = await this.remote.generateBrief({ ...options })
@@ -915,6 +925,7 @@ export class ResearchController implements HostObservable<ResearchView> {
           markdown: result.value.markdown,
           generatedAt: result.value.generatedAt,
           eventCount: result.value.eventCount,
+          questions: Object.freeze(result.value.questions),
           failure: null,
         }),
       })

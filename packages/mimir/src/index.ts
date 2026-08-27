@@ -48,6 +48,7 @@ export type {
   ResearchArtifactResult,
   ResearchArxivSubscriptionsResult,
   ResearchBackupStatusView,
+  ResearchBriefQuestion,
   ResearchCheckArxivSubscriptionsResult,
   ResearchCheckServerResult,
   ResearchCompileResult,
