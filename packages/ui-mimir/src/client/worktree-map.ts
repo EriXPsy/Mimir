@@ -25,16 +25,16 @@ import type {
 /** Time-column budget (moments beyond it fold into shared columns). */
 export const WORKTREE_FLOW_MAX_COLS = 36
 /** Map width in viewBox units. */
-export const WORKTREE_FLOW_W = 640
+const WORKTREE_FLOW_W = 640
 /** Vertical spacing between amplitude levels. */
-export const WORKTREE_FLOW_AMP = 26
+const WORKTREE_FLOW_AMP = 26
 /** Fork/merge bow width in viewBox units. */
-export const WORKTREE_FLOW_BOW = 17
+const WORKTREE_FLOW_BOW = 17
 /**
  * The lane palette: eight macaron-distinct hues, soft enough for the clay
  * skin (fat matte strokes read as clay rolls).
  */
-export const WORKTREE_FLOW_PALETTE: readonly string[] = Object.freeze([
+const WORKTREE_FLOW_PALETTE: readonly string[] = Object.freeze([
   '#d98a68', '#94b89b', '#85a7c6', '#bfa3c9',
   '#d4b06e', '#8ab8ab', '#cf9aa6', '#9aa3b8',
 ])

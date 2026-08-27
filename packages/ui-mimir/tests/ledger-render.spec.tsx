@@ -109,8 +109,8 @@ const FORAGING: ResearchForagingView = {
   ],
 }
 
-describe('LedgerView render smoke (S2 storyline + S4 foraging)', () => {
-  it('renders the storyline strip and the foraging card without crashing', () => {
+describe('LedgerView render smoke (S2 branch flow + S4 rhythm)', () => {
+  it('renders the branch flow and the rhythm card without crashing', () => {
     const cold = { status: 'cold', view: null, failure: null }
     const html = renderToString(
       <LedgerView

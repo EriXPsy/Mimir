@@ -598,10 +598,6 @@
   -webkit-line-clamp: 2;
 }
 
-.projectMeta {
-  color: var(--dsw-alias-label-tertiary, #5b6474);
-  font-size: 12px;
-}
 
 /* The content well: the paper ground. Two faint washes (a slate tint at the
    upper left, an ochre tint at the upper right — the muted-zine rule of one
@@ -5100,12 +5096,6 @@ li.dropIndicator {
 }
 
 
-.worktreeStory svg {
-  display: block;
-  width: 100%;
-  min-width: 480px;
-  height: auto;
-}
 
 
 
