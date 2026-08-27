@@ -57,6 +57,8 @@ function WorktreeFlowStrip({ view, t }: { readonly view: ResearchWorktreeView; r
           <path
             key={`lane-${entry.lane.lineId}`}
             d={entry.path}
+            fill="none"
+            strokeLinecap="round"
             className={
               entry.lane.status === 'failed' ? css.worktreeFlowDead
                 : entry.lane.status === 'adopted' ? css.worktreeFlowAdopted

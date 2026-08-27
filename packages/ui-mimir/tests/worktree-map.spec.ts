@@ -134,6 +134,24 @@ describe('layoutWorktreeFlow', () => {
     expect(beadRadius('work', 1)).toBeGreaterThan(beadRadius('meta', 1))
   })
 
+  it('gives every non-main lane its own rail (no two lanes overlap)', () => {
+    const lanes = [
+      lane('main', 1, 20),
+      lane('p1', 2, 19),
+      lane('c1', 5, 15, { parentLineId: 'main' }),
+      lane('c2', 6, 14, { parentLineId: 'main' }),
+      lane('c3', 7, 13, { parentLineId: 'main' }),
+      lane('g1', 8, 12, { parentLineId: 'c1' }),
+    ]
+    const flow = layoutWorktreeFlow(viewOf(lanes, 'main'))
+    const rails = flow.lanes.filter(e => e.lane.lineId !== 'main').map(e => e.y)
+    expect(new Set(rails).size).toBe(rails.length) // unique ys
+    // Children nest beyond their parent on the parent's side.
+    const c1 = flow.lanes.find(e => e.lane.lineId === 'c1')
+    const g1 = flow.lanes.find(e => e.lane.lineId === 'g1')
+    expect(Math.abs(g1!.y - flow.mainY)).toBeGreaterThan(Math.abs(c1!.y - flow.mainY))
+  })
+
   it('degrades dangling and cyclic declarations to roots without crashes', () => {
     const lanes = [
       lane('dangling', 3, 9, { parentLineId: 'ghost' }),

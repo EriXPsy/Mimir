@@ -149,6 +149,11 @@ describe('LedgerView render smoke (S2 storyline + S4 foraging)', () => {
     expect(html).toContain('worktreeFlowMain')
     expect(html).toContain('worktreeFlowDead')
     expect(html.match(/<path/g)?.length ?? 0).toBeGreaterThanOrEqual(4)
+    // Every curve carries fill="none" as an ATTRIBUTE — the black-wedge bug
+    // (paths filling black whenever the stylesheet fails to apply) can
+    // never recur, in any environment.
+    expect(html.match(/<path[^>]*fill="none"/g)?.length ?? 0)
+      .toBe(html.match(/<path/g)?.length ?? 0)
     expect(html.match(/<circle/g)?.length ?? 0).toBeGreaterThanOrEqual(8)
     expect(html).not.toContain('worktreeGraphLabel')
     expect(html).toContain('研究分支图')

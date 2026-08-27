@@ -5382,7 +5382,7 @@ li.dropIndicator {
 .worktreeFlowDead {
   fill: none;
   stroke-linecap: round;
-  filter: drop-shadow(0 2px 2px rgba(var(--clay-sh, 92, 72, 58), 0.22));
+  filter: drop-shadow(0 2px 2px rgba(92, 72, 58, 0.22));
 }
 
 .worktreeFlowCurve { stroke-width: 7; }
@@ -5395,7 +5395,7 @@ li.dropIndicator {
 .worktreeFlowBeadTerminal {
   stroke: rgba(255, 255, 255, 0.75);
   stroke-width: 1.4;
-  filter: drop-shadow(0 1.5px 1.5px rgba(var(--clay-sh, 92, 72, 58), 0.3));
+  filter: drop-shadow(0 1.5px 1.5px rgba(92, 72, 58, 0.3));
 }
 
 .worktreeFlowBeadMeta { stroke: rgba(255, 255, 255, 0.5); opacity: 0.85; }

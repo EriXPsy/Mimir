@@ -30,8 +30,6 @@ export const WORKTREE_FLOW_W = 640
 export const WORKTREE_FLOW_AMP = 26
 /** Fork/merge bow width in viewBox units. */
 export const WORKTREE_FLOW_BOW = 17
-/** Deepest amplitude level per side (beyond it lanes share the outer rail). */
-export const WORKTREE_FLOW_MAX_LEVEL = 4
 /**
  * The lane palette: eight macaron-distinct hues, soft enough for the clay
  * skin (fat matte strokes read as clay rolls).
@@ -168,28 +166,38 @@ export function layoutWorktreeFlow(view: ResearchWorktreeView): WorktreeFlowLayo
     Math.min(cols - 1, Math.floor(colIndexOf(ts) * cols / sorted.length))
   const xOf = (col: number): number => PAD_X + (col / Math.max(1, cols - 1)) * (WORKTREE_FLOW_W - PAD_X * 2)
 
-  // ── Amplitudes: mainline lane rides the axis; roots bow out level 1,
-  //    children one level beyond their parent; sides alternate by preorder
-  //    index so siblings spread above and below the axis.
+  // ── Amplitudes: the mainline lane rides the axis; every other lane takes
+  //    a UNIQUE rail slot (side + level), children nesting beyond their
+  //    parent, filling the emptier side first — no two lanes ever share a
+  //    rail, and siblings stay on their parent's side of the axis.
   const levelOf = new Map<string, number>()
   const sideOf = new Map<string, number>()
   const parentOf = new Map<string, string>()
-  let index = 0
+  const nextSlot = new Map<number, number>([[-1, 1], [1, 1]])
+  const emptierSide = (): number =>
+    (nextSlot.get(-1) ?? 1) <= (nextSlot.get(1) ?? 1) ? -1 : 1
   for (const lineId of ordered) {
     const parent = candidates.get(lineId)?.parentLineId ?? null
     const hasParent = parent !== null && parent !== lineId && levelOf.has(parent)
-    parentOf.set(lineId, hasParent ? parent! : '')
+    parentOf.set(lineId, hasParent ? parent : '')
     if (lineId === mainlineId) {
       levelOf.set(lineId, 0)
       sideOf.set(lineId, 0)
-    } else if (hasParent) {
-      levelOf.set(lineId, Math.min(WORKTREE_FLOW_MAX_LEVEL, (levelOf.get(parent!) ?? 0) + 1))
-      sideOf.set(lineId, index % 2 === 0 ? -1 : 1)
-    } else {
-      levelOf.set(lineId, 1)
-      sideOf.set(lineId, index % 2 === 0 ? -1 : 1)
+      continue
     }
-    index += 1
+    let side: number
+    let level: number
+    if (hasParent) {
+      const parentSide = sideOf.get(parent) ?? 0
+      side = parentSide !== 0 ? parentSide : emptierSide()
+      level = Math.max((levelOf.get(parent) ?? 0) + 1, nextSlot.get(side) ?? 1)
+    } else {
+      side = emptierSide()
+      level = Math.max(1, nextSlot.get(side) ?? 1)
+    }
+    levelOf.set(lineId, level)
+    sideOf.set(lineId, side)
+    nextSlot.set(side, level + 1)
   }
 
   // The axis sits so the busiest side fits: up levels above, down below.
@@ -218,18 +226,17 @@ export function layoutWorktreeFlow(view: ResearchWorktreeView): WorktreeFlowLayo
     const parent = parentOf.get(lineId) ?? ''
     const curves = parent !== '' && levelOf.get(parent) !== undefined
     const yS = curves ? mainY + (sideOf.get(parent) ?? 0) * (levelOf.get(parent) ?? 0) * WORKTREE_FLOW_AMP : y
-    const xs = curves ? Math.min(x0 + WORKTREE_FLOW_BOW * 1.6, xEnd) : x0
+    const bow = Math.min(WORKTREE_FLOW_BOW, Math.max(0, (xEnd - x0) / 3))
+    const xs = curves ? Math.min(x0 + bow * 1.6, xEnd) : x0
     const adopted = lane.status === 'adopted' && curves
-    const xe = adopted ? Math.max(xs, xEnd - WORKTREE_FLOW_BOW * 1.6) : xEnd
+    const xe = adopted ? Math.max(xs, xEnd - bow * 1.6) : xEnd
     let path: string
     if (!curves || yS === y) {
       path = `M ${String(x0)} ${String(y)} L ${String(xEnd)} ${String(y)}`
     } else {
-      path = `M ${String(x0)} ${String(yS)} Q ${String(x0 + WORKTREE_FLOW_BOW)} ${String(yS)} ${String(xs)} ${String(y)} L ${String(xe)} ${String(y)}`
+      path = `M ${String(x0)} ${String(yS)} Q ${String(x0 + bow)} ${String(yS)} ${String(xs)} ${String(y)} L ${String(xe)} ${String(y)}`
       if (adopted) {
-        path += ` Q ${String(xEnd - WORKTREE_FLOW_BOW)} ${String(yS)} ${String(xEnd)} ${String(yS)}`
-      } else {
-        path += ` L ${String(xEnd)} ${String(y)}`
+        path += ` Q ${String(Math.max(xe, xEnd - bow))} ${String(yS)} ${String(xEnd)} ${String(yS)}`
       }
     }
     const track = [...ordered].indexOf(lineId)
