@@ -1845,6 +1845,7 @@ describe('ResearchController cognitive brief (CBE)', () => {
           markdown: '# Cognitive Brief',
           generatedAt: '2026-08-27T06:00:00.000Z',
           eventCount: 4,
+          derivationVersion: 2,
           questions: [{ kind: 'pending-claim', lineId: 'c9', label: 'delta transfers' }],
         },
       })),
@@ -1856,6 +1857,8 @@ describe('ResearchController cognitive brief (CBE)', () => {
       markdown: '# Cognitive Brief',
       generatedAt: '2026-08-27T06:00:00.000Z',
       eventCount: 4,
+      derivationVersion: 2,
+      recalibrated: false,
       questions: [{ kind: 'pending-claim', lineId: 'c9', label: 'delta transfers' }],
       failure: null,
     })
@@ -1920,6 +1923,22 @@ describe('ResearchController cognitive brief (CBE)', () => {
     expect(seen).toEqual([{ text: '留着这条线', ideaId: 'idea-r', valence: 4 }])
     expect(Object.prototype.hasOwnProperty.call(seen[0], 'projectId')).toBe(false)
     expect(Object.prototype.hasOwnProperty.call(seen[0], 'arousal')).toBe(false)
+  })
+
+  it('addJournal forwards a boundary-question ref exactly when present', async () => {
+    const seen: unknown[] = []
+    const controller = new ResearchController(stubRemote({
+      addJournalEntry: (request) => {
+        seen.push(request)
+        return Promise.resolve(carried<ResearchAddJournalEntryResult>({ ok: true, value: { event: JOURNAL_EVENT } }))
+      },
+    }))
+    const failure = await controller.addJournal('先放着', null, {
+      question: { kind: 'pending-claim', lineId: 'c9' },
+    })
+    expect(failure).toBeNull()
+    expect(seen).toEqual([{ text: '先放着', question: { kind: 'pending-claim', lineId: 'c9' } }])
+    expect(Object.prototype.hasOwnProperty.call(seen[0], 'ideaId')).toBe(false)
   })
 
   it('addJournal returns the failure view inline and stays quiet', async () => {

@@ -10,7 +10,7 @@
  */
 
 import { useState } from 'react'
-import type { ResearchBriefQuestion, ResearchGenerateBriefOptions } from 'dsh-mimir/types'
+import type { ResearchBriefQuestion, ResearchGenerateBriefOptions, ResearchJournalQuestionRef } from 'dsh-mimir/types'
 import type { ResearchBriefView, ResearchFailureView } from './controller.ts'
 import type { ResearchT } from './view-common.ts'
 import { renderMarkdown } from './MarkdownView.tsx'
@@ -33,7 +33,7 @@ export function CognitiveBriefView({
   readonly addJournal: (
     text: string,
     projectId: string | null,
-    refs?: { ideaId?: string | undefined; valence?: number | undefined; arousal?: number | undefined },
+    refs?: { ideaId?: string | undefined; valence?: number | undefined; arousal?: number | undefined; question?: ResearchJournalQuestionRef | undefined },
   ) => Promise<ResearchFailureView | null>
   readonly refreshLedger: () => void
   readonly t: ResearchT
@@ -47,6 +47,8 @@ export function CognitiveBriefView({
   const [arousal, setArousal] = useState<number | null>(null)
   // The line a boundary-question answer is being written against, or null.
   const [activeIdeaId, setActiveIdeaId] = useState<string | null>(null)
+  // The question card being answered (the I4 meta event's source), or null.
+  const [activeQuestion, setActiveQuestion] = useState<ResearchJournalQuestionRef | null>(null)
 
   const state = journalTextState(draft)
 
@@ -60,6 +62,7 @@ export function CognitiveBriefView({
     setActiveIdeaId(
       question.kind === 'returning-branch' && !question.lineId.startsWith('project:') ? question.lineId : null,
     )
+    setActiveQuestion({ kind: question.kind, lineId: question.lineId })
     setDraft(t('journal.ruling.template', { line: question.label }))
     setJournalError(null)
   }
@@ -102,6 +105,7 @@ export function CognitiveBriefView({
       ...(activeIdeaId === null ? {} : { ideaId: activeIdeaId }),
       ...(valence === null ? {} : { valence }),
       ...(arousal === null ? {} : { arousal }),
+      ...(activeQuestion === null ? {} : { question: activeQuestion }),
     })
     setWriting(false)
     if (failure !== null) {
@@ -112,6 +116,7 @@ export function CognitiveBriefView({
     setValence(null)
     setArousal(null)
     setActiveIdeaId(null)
+    setActiveQuestion(null)
     setJournalError(null)
     refreshLedger()
     if (brief.status === 'ready') {
@@ -165,7 +170,11 @@ export function CognitiveBriefView({
           <p className={css.reportMeta}>
             <span>{t('brief.generatedAt')} {new Date(generatedAt).toLocaleString()}</span>
             <span>{brief.eventCount} {t('brief.events')}</span>
+            <span>{t('brief.derivation')} v{String(brief.derivationVersion ?? '?')}</span>
           </p>
+          {brief.recalibrated && (
+            <p className={css.hint} role="status">{t('brief.recalibrated')}</p>
+          )}
           {renderMarkdown(brief.markdown)}
         </div>
       )}

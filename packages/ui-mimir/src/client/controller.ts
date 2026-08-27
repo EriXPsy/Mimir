@@ -61,6 +61,7 @@ import type {
   ResearchFiguresResult,
   ResearchGenerateBriefOptions,
   ResearchGenerateBriefResult,
+  ResearchJournalQuestionRef,
   ResearchImportBibResult,
   ResearchImportPaperResult,
   ResearchImportWikiMode,
@@ -300,6 +301,7 @@ export interface ResearchRemote {
     ideaId?: string | undefined
     valence?: number | undefined
     arousal?: number | undefined
+    question?: ResearchJournalQuestionRef | undefined
   }) => Promise<RemoteResult<ResearchAddJournalEntryResult>>
   getWorktree: () => Promise<RemoteResult<ResearchGetWorktreeResult>>
   setMainline: (request: {
@@ -505,6 +507,10 @@ export interface ResearchBriefView {
   readonly markdown: string
   readonly generatedAt: string | null
   readonly eventCount: number | null
+  /** The derivation version the brief was rendered under (I5). */
+  readonly derivationVersion: number | null
+  /** True when this version differs from the last one seen (I5: the map re-calibrated). */
+  readonly recalibrated: boolean
   /** Label-resolved boundary questions (the confirmation cards' data). */
   readonly questions: readonly ResearchBriefQuestion[]
   readonly failure: ResearchFailureView | null
@@ -630,7 +636,7 @@ const INITIAL_VIEW: ResearchView = Object.freeze({
   venueTemplates: Object.freeze({ status: 'cold', list: Object.freeze([]), failure: null }),
   ledger: Object.freeze({ status: 'cold', list: Object.freeze([]), failure: null }),
   report: Object.freeze({ status: 'idle', markdown: '', generatedAt: null, eventCount: null, failure: null }),
-  brief: Object.freeze({ status: 'idle', markdown: '', generatedAt: null, eventCount: null, questions: Object.freeze([]), failure: null }),
+  brief: Object.freeze({ status: 'idle', markdown: '', generatedAt: null, eventCount: null, derivationVersion: null, recalibrated: false, questions: Object.freeze([]), failure: null }),
   worktree: Object.freeze({ status: 'cold', view: null, failure: null }),
   toasts: Object.freeze([]),
   backup: null,
@@ -916,6 +922,26 @@ export class ResearchController implements HostObservable<ResearchView> {
     }
   }
 
+  /** localStorage key of the last-seen derivation version (I5 notice). */
+  private static readonly DERIVATION_STORAGE_KEY = 'mimir:cbe-derivation-version'
+
+  /**
+   * I5: remember the derivation version the user last saw; a changed
+   * version returns true so the brief view can show the re-calibration
+   * notice. Persistence is best-effort — a blocked storage just drops the
+   * cross-session comparison, never the brief.
+   */
+  private derivationRecalibrated(version: number): boolean {
+    let previous: string | null = null
+    try {
+      previous = localStorage.getItem(ResearchController.DERIVATION_STORAGE_KEY)
+      localStorage.setItem(ResearchController.DERIVATION_STORAGE_KEY, String(version))
+    } catch {
+      previous = null
+    }
+    return previous !== null && previous !== String(version)
+  }
+
   /**
    * Generate the cognitive brief (CBE roadbook) of one window (the brief
    * card's button): the same publish/supersede contract as
@@ -932,6 +958,8 @@ export class ResearchController implements HostObservable<ResearchView> {
         markdown: '',
         generatedAt: null,
         eventCount: null,
+        derivationVersion: null,
+        recalibrated: false,
         questions: Object.freeze([]),
         failure: null,
       }),
@@ -956,6 +984,8 @@ export class ResearchController implements HostObservable<ResearchView> {
           markdown: result.value.markdown,
           generatedAt: result.value.generatedAt,
           eventCount: result.value.eventCount,
+          derivationVersion: result.value.derivationVersion,
+          recalibrated: this.derivationRecalibrated(result.value.derivationVersion),
           questions: Object.freeze(result.value.questions),
           failure: null,
         }),
@@ -986,7 +1016,7 @@ export class ResearchController implements HostObservable<ResearchView> {
   async addJournal(
     text: string,
     projectId: string | null,
-    refs?: { ideaId?: string | undefined; valence?: number | undefined; arousal?: number | undefined },
+    refs?: { ideaId?: string | undefined; valence?: number | undefined; arousal?: number | undefined; question?: ResearchJournalQuestionRef | undefined },
   ): Promise<ResearchFailureView | null> {
     try {
       const carried = await this.remote.addJournalEntry({
@@ -995,6 +1025,7 @@ export class ResearchController implements HostObservable<ResearchView> {
         ...(refs?.ideaId === undefined ? {} : { ideaId: refs.ideaId }),
         ...(refs?.valence === undefined ? {} : { valence: refs.valence }),
         ...(refs?.arousal === undefined ? {} : { arousal: refs.arousal }),
+        ...(refs?.question === undefined ? {} : { question: refs.question }),
       })
       if (!carried.ok) return failureOf(carried.error.code, carried.error.message)
       const result = carried.value

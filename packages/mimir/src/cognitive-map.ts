@@ -49,6 +49,21 @@ export const CBE_LINE_EVIDENCE_CAP = 20
 /** The cap on boundary questions per brief. */
 export const CBE_QUESTION_CAP = 5
 
+/**
+ * The brief's derivation version (I5): bump — and only bump — when any
+ * registered, derivation-affecting parameter changes. The brief carries it
+ * and the view shows the re-calibration notice when it moves, so a changed
+ * number is never silently reinterpreted as a changed life.
+ */
+export const CBE_DERIVATION_VERSION = 2
+
+/** Below this many line events a line stays wordless (the I2 evidence floor). */
+export const CBE_TIER_SILENT_LINE_EVENTS = 5
+/** Line events required before E1 comparative language may appear (I2). */
+export const CBE_TIER_E1_LINE_EVENTS = 20
+/** Window events required before E1 comparative language may appear (I2). */
+export const CBE_TIER_E1_USER_EVENTS = 100
+
 const MS_PER_DAY = 86_400_000
 
 /**
@@ -93,11 +108,19 @@ export const CREATION_ACTIONS: ReadonlySet<string> = new Set([
   'writing.paper.reordered',
 ])
 
-/**
- * The one L2 action: a user-written journal line. It is the ONLY write path
+/** The one L2 action: a user-written journal line. It is the ONLY write path
  * the cognitive layer reads as narrative — never as evidence.
  */
 export const JOURNAL_ACTION = 'journal.entry.added'
+
+/**
+ * The I4 reactivity meta events: the brief records its own questions'
+ * lifecycle — when the map asked, and when the user answered — so the
+ * shown-vs-never-shown comparison stays measurable (G3's natural
+ * experiment). Meta events carry zero weight and never enter LINE_WEIGHTS.
+ */
+export const QUESTION_SHOWED_ACTION = 'cbe.question.showed'
+export const QUESTION_ANSWERED_ACTION = 'cbe.question.answered'
 
 /** The signed weight of one event on its line (outcome-aware). */
 export function signedWeight(event: EventRecord): number {
@@ -113,6 +136,22 @@ export function signedWeight(event: EventRecord): number {
     default:
       return LINE_WEIGHTS[event.action] ?? 0
   }
+}
+
+/**
+ * The evidence tier one line's words may wear (constitution I2): below the
+ * floor a line stays WORDLESS (no state claims at all); with enough line
+ * and window mass, E1 comparative language becomes allowed. The thresholds
+ * are provisional in the PARAMETER_REGISTRY until G1.
+ * @param lineEventCount - events attributed to the line in the window.
+ * @param userEventCount - all events in the window (the window's mass).
+ * @returns the highest tier the line's rendering may wear.
+ */
+export function claimsOf(lineEventCount: number, userEventCount: number): CbeEvidenceTier {
+  if (lineEventCount < CBE_TIER_SILENT_LINE_EVENTS) return 'silent'
+  if (lineEventCount < CBE_TIER_E1_LINE_EVENTS) return 'e0'
+  if (userEventCount < CBE_TIER_E1_USER_EVENTS) return 'e0'
+  return 'e0+e1'
 }
 
 /** One wiki table bundle the pure functions read (assembled by the service). */
@@ -138,6 +177,12 @@ export type CbeLineState =
   | 'returning-side'
   | 'exploring'
 
+/**
+ * The evidence tier a line's words may wear (I2): `silent` = wordless
+ * below the floor, `e0` = descriptive only, `e0+e1` = comparative allowed.
+ */
+export type CbeEvidenceTier = 'silent' | 'e0' | 'e0+e1'
+
 /** One research line's derived state (L1: re-derivable, never a fact). */
 export interface CbeLine {
   /** Idea id, or `project:<id>` for project-level events. */
@@ -158,6 +203,8 @@ export interface CbeLine {
   /** The crossing event id, when the line has settled. */
   readonly settledBy: string | null
   readonly state: CbeLineState
+  /** The highest evidence tier this line's rendering may wear (I2). */
+  readonly tier: CbeEvidenceTier
   /** Newest-first evidence (capped at {@link CBE_LINE_EVIDENCE_CAP}). */
   readonly evidence: readonly string[]
 }
@@ -330,6 +377,9 @@ export function deriveLines(
     })
     .sort((a, b) => a.ts.localeCompare(b.ts) || a.id.localeCompare(b.id))
   const sessions = sessionize(ordered)
+  // The window's total mass feeds the I2 tier: comparative language needs
+  // both enough line events and enough window events.
+  const userEventCount = ordered.length
 
   const lineEvents = new Map<string, Attributed[]>()
   for (const event of ordered) {
@@ -403,6 +453,7 @@ export function deriveLines(
       decisionDays: decisionDays === null ? null : r3(decisionDays),
       settledBy: terminal === null ? null : terminal.id,
       state,
+      tier: claimsOf(attributed.length, userEventCount),
       evidence: Object.freeze(evidence),
     }))
   }
@@ -544,7 +595,10 @@ export function deriveQuestions(
 ): readonly CbeBoundaryQuestion[] {
   const questions: CbeBoundaryQuestion[] = []
   for (const line of lines) {
-    if (line.state !== 'returning-side') continue
+    // I2: a wordless line gets no question either — asking "keep or
+    // archive?" about a line with fewer than five events would be the map
+    // speaking where it must stay silent.
+    if (line.state !== 'returning-side' || line.tier === 'silent') continue
     questions.push(Object.freeze({
       kind: 'returning-branch' as const,
       lineId: line.id,
@@ -644,22 +698,39 @@ export function lineInferenceCard(line: CbeLine, derivedAt: string): InferenceCa
     'returning-side': 'medium',
     exploring: 'low',
   }
+  // I2 in the card: a wordless line carries no state claim at all, and an
+  // E0 line's confidence is capped — comparative certainty needs E1 mass.
+  const statement = line.tier === 'silent'
+    ? `line "${line.label}": ${line.eventCount} events — below the evidence floor (${CBE_TIER_SILENT_LINE_EVENTS}); no state words yet`
+    : byState[line.state]
+  const tierCap: Record<CbeEvidenceTier, 'low' | 'medium' | 'high'> = {
+    silent: 'low',
+    e0: 'medium',
+    'e0+e1': 'high',
+  }
+  const rankOf = (value: 'low' | 'medium' | 'high'): number =>
+    value === 'high' ? 2 : value === 'medium' ? 1 : 0
+  const cappedConfidence = rankOf(confidence[line.state]) <= rankOf(tierCap[line.tier])
+    ? confidence[line.state]
+    : tierCap[line.tier]
+  const mustNotClaim = [
+    'nothing about the user as a person (schedule, mood, identity) — only about the work',
+    'no causal claims beyond the recorded evidence',
+    ...(line.tier === 'e0' ? ['E0 tier: descriptive only — comparative language would outrun the data'] : []),
+  ]
   return Object.freeze({
     id: `cbe-card:${line.id}:${line.lastSeen}`,
     kind: 'drift' as const,
-    statement: byState[line.state],
-    confidence: confidence[line.state],
+    statement,
+    confidence: cappedConfidence,
     evidencePaths: Object.freeze(line.evidence),
     boundaries: Object.freeze({
       observedFacts: Object.freeze([
         `${line.eventCount} events reference the line between ${line.firstSeen} and ${line.lastSeen}`,
         `time-decayed drift ${line.drift}, dispersion ${line.dispersion}, ${line.returnSessions} sessions`,
       ]),
-      allowedInterpretations: Object.freeze([byState[line.state]]),
-      mustNotClaim: Object.freeze([
-        'nothing about the user as a person (schedule, mood, identity) — only about the work',
-        'no causal claims beyond the recorded evidence',
-      ]),
+      allowedInterpretations: Object.freeze([statement]),
+      mustNotClaim: Object.freeze(mustNotClaim),
       evidenceGaps: Object.freeze([
         line.eventCount > CBE_LINE_EVIDENCE_CAP
           ? `${line.eventCount - CBE_LINE_EVIDENCE_CAP} older events omitted by the evidence cap`
@@ -678,6 +749,7 @@ export function renderBriefMarkdown(brief: CbeBrief): string {
   lines.push('')
   lines.push(`- Window: ${brief.window.since} → ${brief.window.until}`)
   lines.push(`- Scope: ${brief.window.projectId === null ? 'all projects' : brief.window.projectId}`)
+  lines.push(`- Derivation: v${CBE_DERIVATION_VERSION}`)
   lines.push(`- Lines: ${brief.lines.length} · Moments: ${brief.moments.length} · Open loops: ${brief.openLoops.length}`)
   lines.push('')
   lines.push('## Lines (drift)')
@@ -685,12 +757,12 @@ export function renderBriefMarkdown(brief: CbeBrief): string {
   if (brief.lines.length === 0) {
     lines.push('_No line-attributable events in the window._')
   } else {
-    lines.push('| Line | State | Drift | σ | Events | Return sessions | Decision (days) |')
-    lines.push('| --- | --- | ---: | ---: | ---: | ---: | ---: |')
+    lines.push('| Line | State | Tier | Drift | σ | Events | Return sessions | Decision (days) |')
+    lines.push('| --- | --- | --- | ---: | ---: | ---: | ---: | ---: |')
     for (const line of brief.lines) {
       // id in a code span so the agent can reference the line stably; label for the human
       lines.push(
-        `| \`${line.id}\` ${line.label} | ${line.state} | ${line.drift} | ${line.dispersion} | ${line.eventCount} | ${line.returnSessions} | ${line.decisionDays === null ? '—' : line.decisionDays} |`,
+        `| \`${line.id}\` ${line.label} | ${line.state} | ${line.tier} | ${line.drift} | ${line.dispersion} | ${line.eventCount} | ${line.returnSessions} | ${line.decisionDays === null ? '—' : line.decisionDays} |`,
       )
     }
   }

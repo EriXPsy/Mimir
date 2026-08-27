@@ -132,10 +132,13 @@ export {
   lineInferenceCard,
   renderBriefMarkdown,
   signedWeight,
+  claimsOf,
   LINE_WEIGHTS,
   TERMINAL_ACTIONS,
   CREATION_ACTIONS,
   JOURNAL_ACTION,
+  QUESTION_SHOWED_ACTION,
+  QUESTION_ANSWERED_ACTION,
   CBE_HALF_LIFE_DAYS,
   CBE_SESSION_GAP_MINUTES,
   CBE_DOMINANT_DRIFT,
@@ -145,11 +148,16 @@ export {
   CBE_FOCUS_DISPERSION,
   CBE_LINE_EVIDENCE_CAP,
   CBE_QUESTION_CAP,
+  CBE_DERIVATION_VERSION,
+  CBE_TIER_SILENT_LINE_EVENTS,
+  CBE_TIER_E1_LINE_EVENTS,
+  CBE_TIER_E1_USER_EVENTS,
 } from './cognitive-map.ts'
 export type {
   CbeBrief,
   CbeBriefWindow,
   CbeBoundaryQuestion,
+  CbeEvidenceTier,
   CbeLine,
   CbeLineState,
   CbeMoment,
@@ -161,6 +169,8 @@ export type {
   CbeWikiSnapshot,
   InferenceCard,
 } from './cognitive-map.ts'
+export { PARAMETER_REGISTRY } from './registry.ts'
+export type { CbeParameterEntry, CbeParameterTrack } from './registry.ts'
 export {
   deriveWorktree,
   ideaParentEdges,

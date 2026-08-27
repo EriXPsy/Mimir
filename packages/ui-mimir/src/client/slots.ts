@@ -20,7 +20,7 @@ import type {} from '@deepseek-ai/dsh-client-ui-sidebar/client'
 import type {} from './locales.ts'
 import type {
   ArxivEntry, BibEntry, ExperimentInput, FigureEntry, MeetingInclude, ResearchEventFilter,
-  ResearchGenerateBriefOptions, ResearchImportWikiMode, ResearchProgressReportOptions,
+  ResearchGenerateBriefOptions, ResearchImportWikiMode, ResearchJournalQuestionRef, ResearchProgressReportOptions,
   ResearchWikiSnapshot, SectionMove, SectionOutlineTitles, ServerInput, SubsectionMove,
 } from 'dsh-mimir/types'
 import type { ResearchFailureView, ResearchImportCounts, ResearchView } from './controller.ts'
@@ -514,7 +514,7 @@ export interface ResearchPanelInjected {
   addJournal: (
     text: string,
     projectId: string | null,
-    refs?: { ideaId?: string | undefined; valence?: number | undefined; arousal?: number | undefined },
+    refs?: { ideaId?: string | undefined; valence?: number | undefined; arousal?: number | undefined; question?: ResearchJournalQuestionRef | undefined },
   ) => Promise<ResearchFailureView | null>
   /**
    * Load the worktree (S2) once, on the ledger view's first open: the

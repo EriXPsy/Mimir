@@ -915,11 +915,23 @@ export interface ResearchBriefQuestion {
   readonly label: string
 }
 
+/**
+ * The boundary question a journal entry answers (I4): rides the
+ * `addJournalEntry` request when the entry was written from a question
+ * card, and lands as a `cbe.question.answered` meta event.
+ */
+export interface ResearchJournalQuestionRef {
+  readonly kind: 'returning-branch' | 'pending-claim'
+  readonly lineId: string
+}
+
 /** `generateBrief` result: the rendered brief plus its interactive questions. */
 export type ResearchGenerateBriefResult = ResearchResult<{
   readonly markdown: string
   readonly generatedAt: string
   readonly eventCount: number
+  /** The derivation version the brief was rendered under (I5). */
+  readonly derivationVersion: number
   readonly questions: readonly ResearchBriefQuestion[]
 }>
 

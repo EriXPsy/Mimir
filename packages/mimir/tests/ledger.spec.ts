@@ -19,6 +19,7 @@ import { researchWikiDomainSpec } from '../src/store.ts'
 import type { ResearchWikiDomain } from '../src/store.ts'
 import { ResearchService } from '../src/service.ts'
 import { createWikiNoteTool } from '../src/tools/wiki.ts'
+import { CBE_DERIVATION_VERSION } from '../src/cognitive-map.ts'
 import {
   appendEvent,
   buildProgressReport,
@@ -510,6 +511,53 @@ describe('cognitive beidou remotes (CBE service wiring)', () => {
     expect(brief.value.eventCount).toBe(4)
   })
 
+  it('generateBrief carries the derivation version and logs the I4 showed meta event', async () => {
+    const { domain, service } = await serviceHarness()
+    await domain.table('projects').put(PROJECT.id, PROJECT)
+    await domain.table('claims').put('c9', {
+      id: 'c9',
+      text: 'another pending claim text that is long enough to stand in a card',
+      status: 'pending',
+      evidence: '—',
+    })
+    const brief = await service.generateBrief({ projectId: PROJECT.id })
+    expect(brief.ok).toBe(true)
+    if (!brief.ok) throw new Error('unreachable')
+    expect(brief.value.derivationVersion).toBe(CBE_DERIVATION_VERSION)
+    const meta = await listEvents(domain, { actionPrefix: 'cbe.question.' })
+    expect(meta).toHaveLength(1)
+    expect(meta[0]).toMatchObject({
+      action: 'cbe.question.showed',
+      actor: { kind: 'user', id: 'panel' },
+      payload: { count: 1, lineIds: ['c9'] },
+    })
+  })
+
+  it('addJournalEntry answers a question card with the I4 answered meta event', async () => {
+    const { domain, service } = await serviceHarness()
+    await domain.table('projects').put(PROJECT.id, PROJECT)
+    await domain.table('claims').put('c9', {
+      id: 'c9',
+      text: 'a pending claim the journal entry answers',
+      status: 'pending',
+      evidence: '—',
+    })
+    const outcome = await service.addJournalEntry({
+      text: '关于这条断言：我的裁定是先放着',
+      question: { kind: 'pending-claim', lineId: 'c9' },
+    })
+    expect(outcome.ok).toBe(true)
+    const meta = await listEvents(domain, { actionPrefix: 'cbe.question.' })
+    expect(meta).toHaveLength(1)
+    expect(meta[0]).toMatchObject({
+      action: 'cbe.question.answered',
+      refs: { claimId: 'c9' },
+      payload: { kind: 'pending-claim', lineId: 'c9' },
+    })
+    await expect(service.addJournalEntry({ text: 'x', question: { kind: 'nonsense', lineId: 'c9' } }))
+      .resolves.toMatchObject({ ok: false, error: { code: 'invalid-input' } })
+  })
+
   it('generateBrief rejects an unknown project id', async () => {
     const { service } = await serviceHarness()
     await expect(service.generateBrief({ projectId: 'ghost' }))
@@ -533,7 +581,15 @@ describe('cognitive beidou remotes (CBE service wiring)', () => {
       evidence: '—',
     })
     const now = Date.now()
-    // A returning-side line: +1.5 / −1.5 / +1.5 across three far-apart days.
+    // A returning-side line: +1.5 / −1.5 / +1.5 / +1.5 / −1.5 across five
+    // far-apart days — five events so the line clears the I2 word floor.
+    await appendEvent(domain, {
+      actor: WIKI_AGENT_ACTOR,
+      action: 'experiments.saved',
+      refs: { ideaId: 'idea-r', projectId: PROJECT.id },
+      payload: { name: 'r0', created: true },
+      now: new Date(now - 7 * 86_400_000),
+    })
     await appendEvent(domain, {
       actor: WIKI_AGENT_ACTOR,
       action: 'experiments.saved',
@@ -554,6 +610,13 @@ describe('cognitive beidou remotes (CBE service wiring)', () => {
       refs: { ideaId: 'idea-r', projectId: PROJECT.id },
       payload: { name: 'r2', created: true },
       now: new Date(now - 1 * 86_400_000),
+    })
+    await appendEvent(domain, {
+      actor: WIKI_AGENT_ACTOR,
+      action: 'experiments.deleted',
+      refs: { ideaId: 'idea-r', projectId: PROJECT.id },
+      payload: { name: 'r0', destructive: true },
+      now: new Date(now - 2 * 86_400_000),
     })
     const brief = await service.generateBrief({ projectId: PROJECT.id })
     expect(brief.ok).toBe(true)

@@ -10,6 +10,7 @@
 import { describe, expect, it } from 'vitest'
 import {
   CBE_LINE_EVIDENCE_CAP,
+  claimsOf,
   deriveBrief,
   deriveLines,
   deriveNarrative,
@@ -73,6 +74,8 @@ function dominantEvents(): readonly EventRecord[] {
     ev('2026-08-26T12:00:00Z', 'experiments.saved', { ideaId: 'idea-a', experimentId: 'exp-a1', projectId: 'p1' }, { name: 'alpha run 1', created: true, metricCount: 2 }),
     ev('2026-08-26T18:00:00Z', 'compute.job.settled', { ideaId: 'idea-a', jobId: 'job-a1', serverId: 'srv1' }, { status: 'succeeded', exitCode: 0, durationMs: 60000 }),
     ev('2026-08-26T22:00:00Z', 'literature.paper.imported', { ideaId: 'idea-a', paperId: '2601.00001', projectId: 'p1' }, { title: 'Alpha related work', imported: true }),
+    // Fifth event so the line clears the I2 word floor (five line events).
+    ev('2026-08-26T23:00:00Z', 'writing.bib.saved', { ideaId: 'idea-a', projectId: 'p1' }, { entries: 3 }),
   ]
 }
 
@@ -325,7 +328,9 @@ describe('lineInferenceCard (L1 epistemic schema)', () => {
     const card = lineInferenceCard(alpha as Parameters<typeof lineInferenceCard>[0], '2026-08-27T00:00:00Z')
     expect(card.kind).toBe('drift')
     expect(card.mutable).toBe(false)
-    expect(card.confidence).toBe('high')
+    // I2: the window's mass is E0, so even a dominant line's confidence
+    // caps at medium — comparative certainty needs E1 mass (tier e0+e1).
+    expect(card.confidence).toBe('medium')
     expect(card.evidencePaths).toEqual(alpha?.evidence)
     expect(card.boundaries.mustNotClaim.join(' ')).toContain('only about the work')
     expect(card.id).toContain('idea-a')
@@ -393,5 +398,37 @@ describe('deriveNarrative (the L2 layer)', () => {
     expect(junk[0]?.valence).toBeUndefined()
     expect(junk[0]?.arousal).toBeUndefined()
     expect(renderBriefMarkdown(deriveBrief(junkEvents, WIKI, WINDOW, NOW))).not.toContain('valence')
+  })
+})
+
+describe('claimsOf (I2 tier gate)', () => {
+  it('stays wordless below the floor, descriptive at E0, comparative only with window mass', () => {
+    expect(claimsOf(4, 1000)).toBe('silent')
+    expect(claimsOf(5, 10)).toBe('e0')
+    expect(claimsOf(19, 1000)).toBe('e0')
+    expect(claimsOf(20, 99)).toBe('e0')
+    expect(claimsOf(20, 100)).toBe('e0+e1')
+  })
+
+  it('marks lines with their tier and keeps silent lines wordless end to end', () => {
+    // Four events on one idea: below the floor, whatever their drift.
+    const quiet = [
+      ev('2026-08-20T00:00:00Z', 'knowledge.idea.added', { ideaId: 'idea-q' }),
+      ev('2026-08-21T00:00:00Z', 'experiments.saved', { ideaId: 'idea-q' }),
+      ev('2026-08-22T00:00:00Z', 'experiments.saved', { ideaId: 'idea-q' }),
+      ev('2026-08-23T00:00:00Z', 'experiments.saved', { ideaId: 'idea-q' }),
+    ]
+    const lines = deriveLines(quiet, WIKI, WINDOW, NOW)
+    const lane = lines.find(line => line.id === 'idea-q')
+    expect(lane?.tier).toBe('silent')
+    // No boundary question for a wordless line (I2: the map stays quiet).
+    expect(deriveQuestions(lines, WIKI).some(question => question.lineId === 'idea-q')).toBe(false)
+    // The card carries no state claim either — the floor is the floor.
+    const card = lineInferenceCard(lane as Parameters<typeof lineInferenceCard>[0], '2026-08-27T00:00:00Z')
+    expect(card.statement).toContain('below the evidence floor')
+    expect(card.confidence).toBe('low')
+    // A line that clears the floor (idea-a, five events) speaks at E0.
+    const all = deriveLines(ALL, WIKI, WINDOW, NOW)
+    expect(all.find(line => line.id === 'idea-a')?.tier).toBe('e0')
   })
 })

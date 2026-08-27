@@ -16,8 +16,9 @@ import {
   listEvents,
   PANEL_ACTOR,
 } from '../ledger.ts'
-import { deriveBrief, JOURNAL_ACTION, renderBriefMarkdown } from '../cognitive-map.ts'
+import { deriveBrief, JOURNAL_ACTION, QUESTION_ANSWERED_ACTION, QUESTION_SHOWED_ACTION, renderBriefMarkdown, CBE_DERIVATION_VERSION } from '../cognitive-map.ts'
 import type { CbeBriefWindow, CbeWikiSnapshot } from '../cognitive-map.ts'
+import { emitEvent } from '../ledger.ts'
 import {
   deriveWorktree,
   ideaParentEdges,
@@ -206,11 +207,23 @@ export async function generateBriefRemote(
       projects: [...deps.domain.table('projects').entries()].map(([, record]) => record),
     }
     const brief = deriveBrief(events, wiki, window, Date.now())
+    const questions = briefQuestions(brief, wiki)
+    // I4 instrumentation: the map records that it asked — the meta event is
+    // zero-weight (never in LINE_WEIGHTS) and best-effort, so the pure
+    // query's contract only gains an observation line, never a failure.
+    if (questions.length > 0) {
+      await emitEvent(deps.domain, {
+        actor: PANEL_ACTOR,
+        action: QUESTION_SHOWED_ACTION,
+        payload: { count: questions.length, lineIds: questions.map(question => question.lineId) },
+      })
+    }
     return success({
       markdown: renderBriefMarkdown(brief),
       generatedAt: new Date().toISOString(),
       eventCount: events.length,
-      questions: briefQuestions(brief, wiki),
+      derivationVersion: CBE_DERIVATION_VERSION,
+      questions,
     })
   } catch (error) {
     return rejected({
@@ -273,6 +286,8 @@ export async function addJournalEntryRemote(
     ideaId?: string | undefined
     valence?: number | undefined
     arousal?: number | undefined
+    /** When the entry answers a boundary-question card, the I4 meta event rides along. */
+    question?: { kind: string; lineId: string } | undefined
   },
 ): Promise<ResearchAddJournalEntryResult> {
   if (typeof request.text !== 'string' || request.text.trim() === '') {
@@ -287,6 +302,17 @@ export async function addJournalEntryRemote(
   if (request.projectId !== undefined
     && deps.domain.table('projects').get(request.projectId) === undefined) {
     return rejected({ code: 'project-not-found', projectId: request.projectId })
+  }
+  if (request.question !== undefined) {
+    const kind = request.question.kind
+    const lineId = request.question.lineId
+    if ((kind !== 'returning-branch' && kind !== 'pending-claim')
+      || typeof lineId !== 'string' || lineId === '') {
+      return rejected({
+        code: 'invalid-input',
+        message: 'question must be { kind: returning-branch | pending-claim, lineId }',
+      })
+    }
   }
   const refs: EventRefs = {
     ...(request.projectId === undefined ? {} : { projectId: request.projectId }),
@@ -303,6 +329,23 @@ export async function addJournalEntryRemote(
         ...moodRating(request.arousal, 'arousal'),
       },
     })
+    // I4 instrumentation: an answer to a boundary-question card is itself
+    // recorded — the G3 natural experiment (shown vs never-shown) reads
+    // these lines. Best-effort, zero-weight, never part of the journal.
+    if (request.question !== undefined) {
+      const lineId = request.question.lineId
+      const answeredRefs: EventRefs = lineId.startsWith('project:')
+        ? { projectId: lineId.slice('project:'.length) }
+        : deps.domain.table('ideas').get(lineId) !== undefined ? { ideaId: lineId }
+        : deps.domain.table('claims').get(lineId) !== undefined ? { claimId: lineId }
+        : {}
+      await emitEvent(deps.domain, {
+        actor: PANEL_ACTOR,
+        action: QUESTION_ANSWERED_ACTION,
+        ...(Object.keys(answeredRefs).length === 0 ? {} : { refs: answeredRefs }),
+        payload: { kind: request.question.kind, lineId },
+      })
+    }
     return success({ event })
   } catch (error) {
     return rejected({
