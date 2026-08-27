@@ -79,7 +79,11 @@ export function LedgerView({
   readonly loadLedger: (filter: ResearchEventFilter) => void
   readonly generateReport: (options: ResearchProgressReportOptions) => Promise<ResearchFailureView | null>
   readonly generateBrief: (options: ResearchGenerateBriefOptions) => Promise<ResearchFailureView | null>
-  readonly addJournal: (text: string, projectId: string | null) => Promise<ResearchFailureView | null>
+  readonly addJournal: (
+    text: string,
+    projectId: string | null,
+    refs?: { ideaId?: string | undefined; valence?: number | undefined; arousal?: number | undefined },
+  ) => Promise<ResearchFailureView | null>
   readonly t: ResearchT
 }) {
   // Named ledgerWindow (not `window`): the global window (timers, clipboard)

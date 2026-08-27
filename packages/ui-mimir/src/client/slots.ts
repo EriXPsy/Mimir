@@ -507,9 +507,15 @@ export interface ResearchPanelInjected {
    * the user's own words, read back by the brief, never weighed as evidence.
    * @param text - the entry's text (non-blank, capped server-side).
    * @param projectId - the project scope, or null for an unscoped entry.
+   * @param refs - optional line ref (`ideaId`, the boundary-question answer
+   * path) and 1–5 self-reported `valence`/`arousal` ratings.
    * @returns null on success, the settled failure view otherwise.
    */
-  addJournal: (text: string, projectId: string | null) => Promise<ResearchFailureView | null>
+  addJournal: (
+    text: string,
+    projectId: string | null,
+    refs?: { ideaId?: string | undefined; valence?: number | undefined; arousal?: number | undefined },
+  ) => Promise<ResearchFailureView | null>
   /**
    * Export the whole wiki as one snapshot (the download button).
    * @returns the snapshot, or the settled failure view.

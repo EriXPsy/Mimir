@@ -26,6 +26,7 @@ import type {
   ClaimRecord,
   EventRecord,
   IdeaRecord,
+  LedgerJsonValue,
   ProjectRecord,
 } from './types.ts'
 
@@ -204,6 +205,8 @@ export interface CbeBoundaryQuestion {
 /**
  * One user-written journal line (the L2 layer): narrative ONLY the user
  * authored, read by the map for the brief but never weighed as evidence.
+ * The optional mood ratings are SELF-REPORTED (the user's own words about
+ * their state) — never inferred; L1 refuses to estimate them.
  */
 export interface CbeNarrative {
   readonly id: string
@@ -214,6 +217,10 @@ export interface CbeNarrative {
   readonly lineId: string | null
   /** The project the entry was written under, or null when unscoped. */
   readonly projectId: string | null
+  /** Self-reported valence rating (1–5), when the user chose to tag one. */
+  readonly valence?: number | undefined
+  /** Self-reported arousal rating (1–5), when the user chose to tag one. */
+  readonly arousal?: number | undefined
 }
 
 /** The composed brief model (the roadbook's data layer). */
@@ -556,6 +563,16 @@ export function deriveQuestions(
 }
 
 /**
+ * Read one self-reported mood rating off a journal payload: only a safe
+ * integer within 1–5 counts (the pure layer guards against junk L0 data).
+ */
+function moodRating(value: LedgerJsonValue | undefined): number | undefined {
+  return typeof value === 'number' && Number.isSafeInteger(value) && value >= 1 && value <= 5
+    ? value
+    : undefined
+}
+
+/**
  * Derive the L2 layer: the user's journal lines, in (ts, id) order. An entry
  * counts only when its `payload.text` is a non-blank string; the line and
  * project scopes ride the event's refs (`ideaId` maps to the line id).
@@ -571,12 +588,16 @@ export function deriveNarrative(events: readonly EventRecord[]): readonly CbeNar
     .flatMap(event => {
       const text = event.payload.text
       if (typeof text !== 'string' || text.trim() === '') return []
+      const valence = moodRating(event.payload.valence)
+      const arousal = moodRating(event.payload.arousal)
       return [Object.freeze({
         id: event.id,
         ts: event.ts,
         text,
         lineId: event.refs.ideaId ?? null,
         projectId: event.refs.projectId ?? null,
+        ...(valence === undefined ? {} : { valence }),
+        ...(arousal === undefined ? {} : { arousal }),
       })]
     })
   return Object.freeze(entries)
@@ -713,7 +734,13 @@ export function renderBriefMarkdown(brief: CbeBrief): string {
   } else {
     for (const entry of brief.narrative) {
       const line = entry.lineId === null ? '' : `\`${entry.lineId}\` `
-      lines.push(`- ${entry.ts} ${line}> ${entry.text}`)
+      // Self-reported ratings render as-is: recorded, never interpreted.
+      const mood = [
+        entry.valence === undefined ? null : `valence ${entry.valence}`,
+        entry.arousal === undefined ? null : `arousal ${entry.arousal}`,
+      ].filter(part => part !== null)
+      const suffix = mood.length === 0 ? '' : ` (${mood.join(' · ')})`
+      lines.push(`- ${entry.ts} ${line}> ${entry.text}${suffix}`)
     }
   }
   lines.push('')

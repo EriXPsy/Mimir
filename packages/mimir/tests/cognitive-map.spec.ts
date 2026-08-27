@@ -377,4 +377,21 @@ describe('deriveNarrative (the L2 layer)', () => {
     const markdown = renderBriefMarkdown(deriveBrief(ALL, WIKI, WINDOW, NOW))
     expect(markdown).toContain('_No words yet — the map is yours to write on._')
   })
+
+  it('carries self-reported mood ratings through, junk values dropped', () => {
+    const tagged = [ev('2026-08-26T10:00:00Z', JOURNAL_ACTION, { projectId: 'p1' }, { text: '有点乱但兴奋', valence: 3, arousal: 5 })]
+    const narrative = deriveNarrative(tagged)
+    expect(narrative[0]?.valence).toBe(3)
+    expect(narrative[0]?.arousal).toBe(5)
+    const markdown = renderBriefMarkdown(deriveBrief(tagged, WIKI, WINDOW, NOW))
+    expect(markdown).toContain('(valence 3 · arousal 5)')
+    // L0 junk never crosses: out-of-range ratings are dropped, not clamped.
+    const junkEvents = [
+      ev('2026-08-26T10:00:00Z', JOURNAL_ACTION, { projectId: 'p1' }, { text: '乱数据', valence: 9, arousal: 'high' }),
+    ]
+    const junk = deriveNarrative(junkEvents)
+    expect(junk[0]?.valence).toBeUndefined()
+    expect(junk[0]?.arousal).toBeUndefined()
+    expect(renderBriefMarkdown(deriveBrief(junkEvents, WIKI, WINDOW, NOW))).not.toContain('valence')
+  })
 })

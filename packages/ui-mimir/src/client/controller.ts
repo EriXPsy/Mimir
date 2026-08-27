@@ -291,6 +291,8 @@ export interface ResearchRemote {
     text: string
     projectId?: string | undefined
     ideaId?: string | undefined
+    valence?: number | undefined
+    arousal?: number | undefined
   }) => Promise<RemoteResult<ResearchAddJournalEntryResult>>
 }
 
@@ -929,18 +931,28 @@ export class ResearchController implements HostObservable<ResearchView> {
 
   /**
    * Write one L2 journal line (the journal box's submit): the text plus the
-   * project scope the view assembled. A success toasts once and returns
-   * null; a failure returns the failure view WITHOUT a toast — the journal
-   * box surfaces it inline.
+   * project scope the view assembled, and optional refs — an `ideaId` writes
+   * the entry against one line (the boundary-question cards' answer path),
+   * `valence`/`arousal` are 1–5 self-report ratings that ride the payload.
+   * A success toasts once and returns null; a failure returns the failure
+   * view WITHOUT a toast — the journal box surfaces it inline.
    * @param text - the user's words (validated client-side, capped server-side).
    * @param projectId - the project scope, or null for an unscoped entry.
+   * @param refs - optional line ref and self-reported mood ratings.
    * @returns null on success, the settled failure view otherwise.
    */
-  async addJournal(text: string, projectId: string | null): Promise<ResearchFailureView | null> {
+  async addJournal(
+    text: string,
+    projectId: string | null,
+    refs?: { ideaId?: string | undefined; valence?: number | undefined; arousal?: number | undefined },
+  ): Promise<ResearchFailureView | null> {
     try {
       const carried = await this.remote.addJournalEntry({
         text,
         ...(projectId === null ? {} : { projectId }),
+        ...(refs?.ideaId === undefined ? {} : { ideaId: refs.ideaId }),
+        ...(refs?.valence === undefined ? {} : { valence: refs.valence }),
+        ...(refs?.arousal === undefined ? {} : { arousal: refs.arousal }),
       })
       if (!carried.ok) return failureOf(carried.error.code, carried.error.message)
       const result = carried.value

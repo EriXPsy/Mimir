@@ -439,6 +439,22 @@ describe('cognitive beidou remotes (CBE service wiring)', () => {
     expect(events[0]?.id).toBe(outcome.value.event.id)
   })
 
+  it('addJournalEntry carries optional self-reported mood ratings, range-checked', async () => {
+    const { service } = await serviceHarness()
+    const tagged = await service.addJournalEntry({ text: '今天有点乱但兴奋', valence: 4, arousal: 5 })
+    expect(tagged.ok).toBe(true)
+    if (!tagged.ok) throw new Error('unreachable')
+    expect(tagged.value.event.payload).toEqual({ text: '今天有点乱但兴奋', valence: 4, arousal: 5 })
+    const oneSided = await service.addJournalEntry({ text: '只标一头', valence: 2 })
+    expect(oneSided.ok).toBe(true)
+    if (!oneSided.ok) throw new Error('unreachable')
+    expect(oneSided.value.event.payload).toEqual({ text: '只标一头', valence: 2 })
+    await expect(service.addJournalEntry({ text: 'x', valence: 0 }))
+      .resolves.toMatchObject({ ok: false, error: { code: 'invalid-input', message: 'valence must be an integer between 1 and 5' } })
+    await expect(service.addJournalEntry({ text: 'x', arousal: 2.5 }))
+      .resolves.toMatchObject({ ok: false, error: { code: 'invalid-input', message: 'arousal must be an integer between 1 and 5' } })
+  })
+
   it('addJournalEntry rejects blank text, over-cap text, and unknown projects', async () => {
     const { service } = await serviceHarness()
     await expect(service.addJournalEntry({ text: '   ', projectId: 'p1' }))

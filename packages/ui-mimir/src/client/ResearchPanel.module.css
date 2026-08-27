@@ -3930,6 +3930,28 @@ li.dropIndicator {
   font-size: 11px;
 }
 
+.journalMood {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.journalMoodLabel {
+  color: var(--dsw-alias-label-tertiary, #857d6c);
+  font-size: 11px;
+}
+
+.journalSelect {
+  padding: 2px 6px;
+  border: 1px solid var(--mimir-line);
+  border-radius: 6px;
+  background: var(--mimir-sheet);
+  color: var(--dsw-alias-label-primary, #211e19);
+  font-family: var(--mimir-mono);
+  font-size: 11px;
+  outline: none;
+}
+
 /* The timeline: one hairline-separated row per event — microtext timestamp,
    a flat square node, the action stamp, the actor microtext, the payload line. */
 .timelineCard {

@@ -200,13 +200,27 @@ export async function generateBriefRemote(
 }
 
 /**
+ * Validate one self-reported mood rating (1–5 integer): returns a one-key
+ * payload spread, or throws a RangeError naming the field. Self-report
+ * ONLY — the service never estimates these for the user.
+ */
+function moodRating(value: number | undefined, name: string): Record<string, number> {
+  if (value === undefined) return {}
+  if (!Number.isSafeInteger(value) || value < 1 || value > 5) {
+    throw new RangeError(`${name} must be an integer between 1 and 5`)
+  }
+  return { [name]: value }
+}
+
+/**
  * Append one L2 journal entry (the user's own words) to the ledger: the only
  * write path the cognitive map reads as narrative. The text must be a
  * non-blank string capped at {@link JOURNAL_TEXT_MAX_CHARS} characters; a
  * `projectId` scopes the entry (unknown id → `project-not-found`), an
  * `ideaId` writes it against one line — both refs are omitted when absent.
- * The stored event is the single source of truth: L2 is re-derived, never
- * persisted as a table of its own.
+ * Optional `valence`/`arousal` self-report ratings (1–5 integers) ride the
+ * payload verbatim. The stored event is the single source of truth: L2 is
+ * re-derived, never persisted as a table of its own.
  * @param deps - open wiki domain.
  * @param request - the text plus optional project/line refs.
  * @returns the stored journal event.
@@ -217,6 +231,8 @@ export async function addJournalEntryRemote(
     text: string
     projectId?: string | undefined
     ideaId?: string | undefined
+    valence?: number | undefined
+    arousal?: number | undefined
   },
 ): Promise<ResearchAddJournalEntryResult> {
   if (typeof request.text !== 'string' || request.text.trim() === '') {
@@ -241,7 +257,11 @@ export async function addJournalEntryRemote(
       actor: PANEL_ACTOR,
       action: JOURNAL_ACTION,
       ...(Object.keys(refs).length === 0 ? {} : { refs }),
-      payload: { text: request.text },
+      payload: {
+        text: request.text,
+        ...moodRating(request.valence, 'valence'),
+        ...moodRating(request.arousal, 'arousal'),
+      },
     })
     return success({ event })
   } catch (error) {

@@ -630,6 +630,8 @@ export class ResearchService extends TypertRemoteService {
     text: string
     projectId?: string | undefined
     ideaId?: string | undefined
+    valence?: number | undefined
+    arousal?: number | undefined
   }): Promise<ResearchAddJournalEntryResult> {
     return ledger.addJournalEntryRemote(this.deps, request)
   }

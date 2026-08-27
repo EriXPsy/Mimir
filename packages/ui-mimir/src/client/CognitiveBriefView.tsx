@@ -30,7 +30,11 @@ export function CognitiveBriefView({
   readonly briefWindow: LedgerWindow
   readonly scopedProjectId: string | null
   readonly generateBrief: (options: ResearchGenerateBriefOptions) => Promise<ResearchFailureView | null>
-  readonly addJournal: (text: string, projectId: string | null) => Promise<ResearchFailureView | null>
+  readonly addJournal: (
+    text: string,
+    projectId: string | null,
+    refs?: { ideaId?: string | undefined; valence?: number | undefined; arousal?: number | undefined },
+  ) => Promise<ResearchFailureView | null>
   readonly refreshLedger: () => void
   readonly t: ResearchT
 }) {
@@ -38,6 +42,9 @@ export function CognitiveBriefView({
   const [draft, setDraft] = useState('')
   const [writing, setWriting] = useState(false)
   const [journalError, setJournalError] = useState<string | null>(null)
+  // Self-reported mood ratings (1–5), null = the user chose not to tag one.
+  const [valence, setValence] = useState<number | null>(null)
+  const [arousal, setArousal] = useState<number | null>(null)
 
   const state = journalTextState(draft)
 
@@ -75,13 +82,18 @@ export function CognitiveBriefView({
   const onWrite = async (): Promise<void> => {
     if (state !== 'ok' || writing) return
     setWriting(true)
-    const failure = await addJournal(draft, scopedProjectId)
+    const failure = await addJournal(draft, scopedProjectId, {
+      ...(valence === null ? {} : { valence }),
+      ...(arousal === null ? {} : { arousal }),
+    })
     setWriting(false)
     if (failure !== null) {
       setJournalError(failure.message)
       return
     }
     setDraft('')
+    setValence(null)
+    setArousal(null)
     setJournalError(null)
     refreshLedger()
     if (brief.status === 'ready') {
@@ -159,6 +171,28 @@ export function CognitiveBriefView({
         <div className={css.journalFoot}>
           <span className={css.journalCount} data-over={state === 'too-long' || undefined}>
             {draft.length}/{JOURNAL_MAX_CHARS}
+          </span>
+          <span className={css.journalMood}>
+            <label className={css.journalMoodLabel} htmlFor="mimir-journal-valence">{t('journal.valence')}</label>
+            <select
+              id="mimir-journal-valence"
+              className={css.journalSelect}
+              value={valence === null ? '' : String(valence)}
+              onChange={event => { setValence(event.target.value === '' ? null : Number(event.target.value)) }}
+            >
+              <option value="">—</option>
+              {[1, 2, 3, 4, 5].map(rating => <option key={rating} value={rating}>{rating}</option>)}
+            </select>
+            <label className={css.journalMoodLabel} htmlFor="mimir-journal-arousal">{t('journal.arousal')}</label>
+            <select
+              id="mimir-journal-arousal"
+              className={css.journalSelect}
+              value={arousal === null ? '' : String(arousal)}
+              onChange={event => { setArousal(event.target.value === '' ? null : Number(event.target.value)) }}
+            >
+              <option value="">—</option>
+              {[1, 2, 3, 4, 5].map(rating => <option key={rating} value={rating}>{rating}</option>)}
+            </select>
           </span>
           {state === 'too-long' && (
             <span className={css.journalOver}>{t('journal.tooLong', { count: String(JOURNAL_MAX_CHARS) })}</span>
