@@ -11,7 +11,7 @@
  */
 
 import { useState } from 'react'
-import type { ResearchWorktreeLaneView } from 'dsh-mimir/types'
+import type { ResearchWorktreeLaneView, ResearchWorktreeView } from 'dsh-mimir/types'
 import type { ResearchWorktreeSlice, ResearchFailureView } from './controller.ts'
 import type { ResearchKey } from './locales.ts'
 import type { ResearchT } from './view-common.ts'
@@ -21,6 +21,94 @@ import css from './ResearchPanel.module.css'
 /** Whole days, rounded for display (the wire carries r3 precision). */
 function days(value: number): string {
   return String(Math.max(0, Math.round(value)))
+}
+
+/**
+ * The storyline strip (Ogawa & Ma's software-evolution storylines, v1.5
+ * minimal): one horizontal lifeline per lane — declared → last touch (or
+ * close) — with the mainline-declaration epochs as dashed verticals and
+ * a solid now-line. Pure SVG over E0 timestamps; no zoom, no smoothing,
+ * no stacking — the ③ v1.5 floor. Glyphs repeat the list's vocabulary
+ * (● mainline, ⌥ open, ✓ adopted, ✗ dead end) so the strip never adds a
+ * second visual grammar.
+ * @param props - the worktree view model.
+ * @returns the storyline SVG (or nothing before any lane exists).
+ */
+function StorylineStrip({ view }: { readonly view: ResearchWorktreeView }) {
+  const rows = view.lanes.slice(0, 24)
+  if (rows.length === 0) return null
+  const nowMs = Date.parse(view.derivedAt)
+  const times: number[] = [nowMs]
+  for (const lane of rows) {
+    const first = Date.parse(lane.firstSeen)
+    const end = lane.status === 'failed' && lane.closedAt !== null
+      ? Date.parse(lane.closedAt)
+      : Date.parse(lane.lastSeen)
+    if (Number.isFinite(first)) times.push(first)
+    if (Number.isFinite(end)) times.push(end)
+  }
+  for (const epoch of view.mainlineHistory) {
+    const at = Date.parse(epoch.declaredAt)
+    if (Number.isFinite(at)) times.push(at)
+  }
+  const tMin = Math.min(...times)
+  const tMax = Math.max(...times)
+  const span = tMax - tMin || 1
+  const W = 640
+  const ROW_H = 14
+  const PAD_X = 6
+  const height = rows.length * ROW_H + 6
+  const x = (ms: number): number => PAD_X + ((ms - tMin) / span) * (W - PAD_X * 2)
+  return (
+    <div className={css.worktreeStory} role="img" aria-label="storyline">
+      <svg viewBox={`0 0 ${String(W)} ${String(height)}`} preserveAspectRatio="none">
+        {view.mainlineHistory.map(epoch => {
+          const at = Date.parse(epoch.declaredAt)
+          if (!Number.isFinite(at)) return null
+          return (
+            <line
+              key={`epoch-${epoch.lineId}-${epoch.declaredAt}`}
+              x1={x(at)} x2={x(at)} y1={2} y2={height - 2}
+              className={css.worktreeStoryEpoch}
+            >
+              <title>{`${epoch.label} · ${epoch.declaredAt.slice(0, 10)}`}</title>
+            </line>
+          )
+        })}
+        <line
+          x1={x(nowMs)} x2={x(nowMs)} y1={2} y2={height - 2}
+          className={css.worktreeStoryNow}
+        />
+        {rows.map((lane, index) => {
+          const first = Date.parse(lane.firstSeen)
+          const end = lane.status === 'failed' && lane.closedAt !== null
+            ? Date.parse(lane.closedAt)
+            : Date.parse(lane.lastSeen)
+          if (!Number.isFinite(first) || !Number.isFinite(end)) return null
+          const y = index * ROW_H + ROW_H / 2 + 2
+          const isMain = view.mainline?.lineId === lane.lineId
+          return (
+            <g key={`lane-${lane.lineId}`}>
+              <line
+                x1={x(first)} x2={x(end)} y1={y} y2={y}
+                className={
+                  isMain ? css.worktreeStoryMain
+                    : lane.status === 'failed' ? css.worktreeStoryDead
+                      : lane.status === 'adopted' ? css.worktreeStoryMerged
+                        : css.worktreeStoryOpen
+                }
+              >
+                <title>{`${lane.label} · ${lane.firstSeen.slice(0, 10)} → ${new Date(end).toISOString().slice(0, 10)}`}</title>
+              </line>
+              <text x={x(end) + 3} y={y + 3} className={css.worktreeStoryGlyph}>
+                {isMain ? '●' : lane.status === 'failed' ? '✗' : lane.status === 'adopted' ? '✓' : '⌥'}
+              </text>
+            </g>
+          )
+        })}
+      </svg>
+    </div>
+  )
 }
 
 /** One lane row: the glyph, the label, the E0 numbers, and the declared structure. */
@@ -265,6 +353,9 @@ export function WorktreeView({
                 </>
               )}
           </div>
+          {/* The storyline strip: lifelines + epoch lines + the now-line. */}
+          <StorylineStrip view={view} />
+
           {lanes.length === 0 && <p className={css.hint}>{t('worktree.empty')}</p>}
           {groups.map(group => group.lanes.length === 0 ? null : (
             <div key={group.key} className={css.worktreeGroup}>
