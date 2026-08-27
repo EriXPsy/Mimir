@@ -116,6 +116,43 @@ export {
   LIST_EVENTS_MAX_LIMIT,
 } from './ledger.ts'
 export type { LedgerEventInput } from './ledger.ts'
+export {
+  deriveLines,
+  detectMoments,
+  deriveTransitions,
+  deriveOpenLoops,
+  deriveQuestions,
+  deriveBrief,
+  lineInferenceCard,
+  renderBriefMarkdown,
+  signedWeight,
+  LINE_WEIGHTS,
+  TERMINAL_ACTIONS,
+  CREATION_ACTIONS,
+  CBE_HALF_LIFE_DAYS,
+  CBE_SESSION_GAP_MINUTES,
+  CBE_DOMINANT_DRIFT,
+  CBE_STALLED_DRIFT,
+  CBE_EXPLORE_EVENTS,
+  CBE_RETURN_SESSIONS,
+  CBE_FOCUS_DISPERSION,
+  CBE_LINE_EVIDENCE_CAP,
+  CBE_QUESTION_CAP,
+} from './cognitive-map.ts'
+export type {
+  CbeBrief,
+  CbeBriefWindow,
+  CbeBoundaryQuestion,
+  CbeLine,
+  CbeLineState,
+  CbeMoment,
+  CbeOpenLoop,
+  CbeOpenLoopKind,
+  CbeQuestionKind,
+  CbeTransition,
+  CbeWikiSnapshot,
+  InferenceCard,
+} from './cognitive-map.ts'
 export { parseLatexErrors } from './latex-log.ts'
 export type { LatexIssue } from './latex-log.ts'
 export { parseTexOutline } from './outline.ts'
