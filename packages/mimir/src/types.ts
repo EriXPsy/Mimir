@@ -1007,3 +1007,30 @@ export type ResearchSetIdeaParentResult = ResearchResult<{ readonly event: Event
 /** `closeIdea` result: the stored `knowledge.idea.failed` event (a documented No). */
 export type ResearchCloseIdeaResult = ResearchResult<{ readonly event: EventRecord }>
 
+/* ── Evidence engine (S3) wire payloads — E1, read-only until G1 ────────── */
+
+/** One action's learned row of the evidence profile. */
+export interface ResearchEvidenceActionView {
+  readonly action: string
+  /** The hand prior (LINE_WEIGHTS) — today's map value. */
+  readonly prior: number
+  /** The learned, share-accumulated mean of terminal outcomes. */
+  readonly mean: number
+  /** Accumulated eligibility share (evidence mass). */
+  readonly mass: number
+  /** The κ-shrunk effective value: `(mass·mean + κ·prior)/(mass + κ)`. */
+  readonly effectiveValue: number
+}
+
+/** `getEvidenceProfile` payload: the folded profile, E1 instrumentation. */
+export interface ResearchEvidenceProfileView {
+  readonly derivationVersion: number
+  readonly terminalsFolded: number
+  readonly actions: readonly ResearchEvidenceActionView[]
+}
+
+/** `getEvidenceProfile` result: read-only; consumed by no UI until G1. */
+export type ResearchGetEvidenceProfileResult = ResearchResult<{
+  readonly profile: ResearchEvidenceProfileView
+}>
+

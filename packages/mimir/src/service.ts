@@ -23,6 +23,7 @@ import type {
   ResearchAddJournalEntryResult,
   ResearchArxivSubscriptionsResult,
   ResearchCloseIdeaResult,
+  ResearchGetEvidenceProfileResult,
   ResearchGetWorktreeResult,
   ResearchSetIdeaParentResult,
   ResearchSetMainlineResult,
@@ -669,6 +670,12 @@ export class ResearchService extends TypertRemoteService {
     reason: string
   }): Promise<ResearchCloseIdeaResult> {
     return ledger.closeIdeaRemote(this.deps, request)
+  }
+
+  // evidence engine (S3): read-only E1 instrumentation, no UI until G1
+  @Remote('getEvidenceProfile')
+  getEvidenceProfile(): Promise<ResearchGetEvidenceProfileResult> {
+    return ledger.getEvidenceProfileRemote(this.deps)
   }
 }
 

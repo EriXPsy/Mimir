@@ -11,6 +11,7 @@ import type { ResearchWikiDomain } from '../store.ts'
 import {
   appendEvent,
   buildProgressReport,
+  emitEvent,
   JOURNAL_TEXT_MAX_CHARS,
   LIST_EVENTS_MAX_LIMIT,
   listEvents,
@@ -18,7 +19,7 @@ import {
 } from '../ledger.ts'
 import { deriveBrief, JOURNAL_ACTION, QUESTION_ANSWERED_ACTION, QUESTION_SHOWED_ACTION, renderBriefMarkdown, CBE_DERIVATION_VERSION } from '../cognitive-map.ts'
 import type { CbeBriefWindow, CbeWikiSnapshot } from '../cognitive-map.ts'
-import { emitEvent } from '../ledger.ts'
+import { evidenceModelAt, evidenceProfileOf } from '../cbe-engine.ts'
 import {
   deriveWorktree,
   ideaParentEdges,
@@ -38,6 +39,7 @@ import type {
   ResearchCloseIdeaResult,
   ResearchGenerateBriefOptions,
   ResearchGenerateBriefResult,
+  ResearchGetEvidenceProfileResult,
   ResearchGetWorktreeResult,
   ResearchListEventsResult,
   ResearchProgressReportOptions,
@@ -352,6 +354,38 @@ export async function addJournalEntryRemote(
       code: 'invalid-input',
       message: error instanceof RangeError ? error.message : 'journal entry is invalid',
     })
+  }
+}
+
+/* ------------------------------------------------------------------------ *
+ * Evidence engine (S3): the learned profile — read-only instrumentation.
+ * ------------------------------------------------------------------------ */
+
+/**
+ * Read the learned evidence profile (E1 instrumentation): the κ-shrunk
+ * effective value of every ledger action, folded over the full ledger by
+ * the pure engine (`evidenceModelAt`). READ-ONLY and deliberately NOT
+ * consumed by any UI until G1 passes — the profile exists so the
+ * priors-versus-learned comparison is inspectable when that day comes.
+ * The profile must never be used as a self-optimization performance
+ * metric: its job is honest priors, not leaderboard copy.
+ * @param deps - open wiki domain.
+ * @returns the folded profile (rows sorted by effective value).
+ */
+export async function getEvidenceProfileRemote(deps: LedgerDeps): Promise<ResearchGetEvidenceProfileResult> {
+  try {
+    const events = await listEvents(deps.domain, { limit: LIST_EVENTS_MAX_LIMIT })
+    const model = evidenceModelAt(events)
+    const profile = evidenceProfileOf(model)
+    return success({
+      profile: {
+        derivationVersion: profile.derivation.version,
+        terminalsFolded: profile.derivation.terminalsFolded,
+        actions: profile.actions,
+      },
+    })
+  } catch {
+    return rejected({ code: 'operation-failed', message: 'the evidence profile could not be folded' })
   }
 }
 

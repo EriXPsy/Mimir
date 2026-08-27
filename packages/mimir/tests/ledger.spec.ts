@@ -786,6 +786,47 @@ describe('worktree remotes (S2 service wiring)', () => {
   })
 })
 
+describe('evidence engine remotes (S3 service wiring)', () => {
+  it('getEvidenceProfile folds the priors over an empty ledger', async () => {
+    const { service } = await serviceHarness()
+    const outcome = await service.getEvidenceProfile()
+    expect(outcome.ok).toBe(true)
+    if (!outcome.ok) throw new Error('unreachable')
+    expect(outcome.value.profile.terminalsFolded).toBe(0)
+    expect(outcome.value.profile.actions.length).toBeGreaterThan(0)
+    const saved = outcome.value.profile.actions.find(row => row.action === 'experiments.saved')
+    expect(saved?.effectiveValue).toBe(saved?.prior)
+  })
+
+  it('getEvidenceProfile folds a attributed terminal into a learned row', async () => {
+    const { domain, service } = await serviceHarness()
+    await domain.table('projects').put(PROJECT.id, PROJECT)
+    await appendEvent(domain, {
+      actor: WIKI_AGENT_ACTOR,
+      action: 'experiments.saved',
+      refs: { ideaId: 'i1', projectId: PROJECT.id },
+      payload: { name: 'run', created: true },
+      now: new Date(Date.now() - 2 * 86_400_000),
+    })
+    // Synthetic rich refs: today's real claim emit carries only claimId —
+    // attribution enrichment is the standing P2 item (see cbe-engine.spec).
+    await appendEvent(domain, {
+      actor: WIKI_AGENT_ACTOR,
+      action: 'knowledge.claim.set',
+      refs: { ideaId: 'i1', projectId: PROJECT.id },
+      payload: { status: 'supported' },
+      now: new Date(Date.now() - 1 * 86_400_000),
+    })
+    const outcome = await service.getEvidenceProfile()
+    expect(outcome.ok).toBe(true)
+    if (!outcome.ok) throw new Error('unreachable')
+    expect(outcome.value.profile.terminalsFolded).toBe(1)
+    const saved = outcome.value.profile.actions.find(row => row.action === 'experiments.saved')
+    expect(saved?.mass).toBeGreaterThan(0)
+    expect(saved?.effectiveValue).not.toBe(saved?.prior)
+  })
+})
+
 describe('wiki_note ledger wiring (agent actor)', () => {
   /** The tool's execute needs a ToolRunContext it never reads in these paths. */
   const NO_EXEC = {} as ToolRunContext

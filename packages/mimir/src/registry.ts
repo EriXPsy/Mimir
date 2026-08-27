@@ -176,4 +176,34 @@ export const PARAMETER_REGISTRY: Readonly<Record<string, CbeParameterEntry>> = O
     issue: 'None planned; the client mirrors it as WORKTREE_REASON_MAX_CHARS.',
     lastReviewed: '2026-08-27',
   },
+
+  /* ── cbe-engine.ts (S3, batch 4) ──────────────────────────────────── */
+  CBE_ENGINE_ALPHA: {
+    value: 0.3,
+    track: 'calibratable',
+    anchor: 'Singh & Sutton 1996 share-form credit assignment; RLDDM’s dual-α is the precedent for outcome-asymmetric steps (here a single α over sign-only outcomes).',
+    issue: 'G0 sensitivity sweep first; fit on the real ledger only after ~20 terminals at G1.',
+    lastReviewed: '2026-08-27',
+  },
+  CBE_ENGINE_KAPPA: {
+    value: 6,
+    track: 'calibratable',
+    anchor: 'Bayesian shrinkage: prior pseudo-mass — roughly four full-share terminals of data begin to outweigh the priors, keeping cold start ≡ today’s map.',
+    issue: 'G1 calibration; κ must preserve the sparse-terminals ⇒ ≈-prior guarantee.',
+    lastReviewed: '2026-08-27',
+  },
+  CBE_ENGINE_N_FLIP: {
+    value: 3,
+    track: 'provisional',
+    anchor: 'Sign-lock quorum: three full shares of contrary evidence may flip a prior’s sign; one terminal may not.',
+    issue: 'G0 sweep; retire the lock if G1 shows it never binds on real ledgers.',
+    lastReviewed: '2026-08-27',
+  },
+  CBE_ENGINE_FOLD_WINDOW_DAYS: {
+    value: 180,
+    track: 'provisional',
+    anchor: 'Half a year of eligibility — long enough to span a research chapter, short enough that stale traces fade.',
+    issue: 'G1: compare 90/180/365 by descriptive fit, never by outcome reward.',
+    lastReviewed: '2026-08-27',
+  },
 })

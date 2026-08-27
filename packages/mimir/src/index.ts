@@ -184,6 +184,24 @@ export type {
   CbeWorktreeLaneStatus,
   CbeMainlineDeclaration,
 } from './worktree.ts'
+export {
+  evidenceModelAt,
+  evidenceProfileOf,
+  effectiveValue,
+  initialModel,
+  terminalOutcome,
+  isTerminalOutcome,
+  updateOnTerminal,
+  CBE_ENGINE_ALPHA,
+  CBE_ENGINE_KAPPA,
+  CBE_ENGINE_N_FLIP,
+  CBE_ENGINE_FOLD_WINDOW_DAYS,
+} from './cbe-engine.ts'
+export type {
+  CbeEvidenceModel,
+  CbeActionValue,
+  CbeEvidenceActionRow,
+} from './cbe-engine.ts'
 export { parseLatexErrors } from './latex-log.ts'
 export type { LatexIssue } from './latex-log.ts'
 export { parseTexOutline } from './outline.ts'
