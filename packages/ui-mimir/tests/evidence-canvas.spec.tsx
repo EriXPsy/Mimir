@@ -17,7 +17,8 @@ import type {
   EvidenceTimelineGroup,
 } from 'dsh-mimir/types'
 import { deriveEvidenceGraphLayout, type EvidenceGraphLayoutInput } from '../src/client/evidence-graph-layout.ts'
-import { conflictLinesByClaim } from '../src/client/evidence-graph-view.ts'
+import { conflictLinesByClaim, conflictPairsOfClaim } from '../src/client/evidence-graph-view.ts'
+import { DetailPanel } from '../src/client/EvidenceGraphView.tsx'
 import { EvidenceGraphCanvas } from '../src/client/EvidenceGraphCanvas.tsx'
 import { zh } from '../src/client/locales.ts'
 import type { ResearchKey } from '../src/client/locales.ts'
@@ -64,7 +65,7 @@ const CONFLICTS: EvidenceConflict[] = [{
 }]
 const FIXTURE = graph({
   timeline: [group({ key: 'idea:1', claims: [
-    claim({ claimKey: 'claim:c1', hasConflict: true, history: [
+    claim({ claimKey: 'claim:c1', supportsCount: 1, contradictsCount: 1, hasConflict: true, history: [
       entry({ sourceEventId: 'sup', ts: '2026-09-01T10:00:00.000Z', rel: 'supports' }),
       entry({ sourceEventId: 'con', ts: '2026-09-02T10:00:00.000Z', rel: 'contradicts' }),
     ] }),
@@ -137,5 +138,57 @@ describe('EvidenceGraphCanvas claim-head conflict roll-up', () => {
     const html = renderCanvas()
     expect(html.match(/class="[^"]*evidenceNodeHit[^"]*"/g)?.length ?? 0).toBeGreaterThan(0)
     expect(html).toMatch(/evidenceNodeHit[^>]*r="14"/)
+  })
+})
+
+describe('DetailPanel head selection (conflict pairs)', () => {
+  /** Render the real DetailPanel for one laid-out node from the fixture. */
+  function renderDetail(claimKey: string): string {
+    const layout = deriveEvidenceGraphLayout(FIXTURE)
+    const node = layout.nodes.find(item => item.id === `head:${claimKey}`) ?? null
+    if (node === null) throw new Error(`no head node for ${claimKey}`)
+    const claimHistory = FIXTURE.timeline
+      .flatMap(group => group.claims)
+      .find(item => item.claimKey === claimKey) ?? null
+    const pairs = conflictPairsOfClaim(FIXTURE.conflicts, claimKey)
+    const noop = (): void => {}
+    return renderToString(
+      <DetailPanel
+        node={node}
+        edge={null}
+        claim={claimHistory}
+        pairs={pairs}
+        onJump={noop}
+        onJumpToAudit={noop}
+        onConfirm={noop}
+        onClose={noop}
+        t={t as ResearchT}
+      />,
+    )
+  }
+
+  it('shows the conflict detail with counts, both ends, and the audit jump on a conflicted head', () => {
+    const html = renderDetail('claim:c1')
+    expect(html).toContain(t('evidence.conflictDetail.title'))
+    expect(html).toContain(t('evidence.claim.counts', { supports: 1, contradicts: 1 }))
+    expect(html).toContain(t('evidence.conflictDetail.jump'))
+    // Both ends of the pair, with their sources and the supporting note.
+    expect(html).toContain('lit:arxiv:2401.00001')
+    expect(html).toContain('exp:run:0042')
+    expect(html).toContain('clean replication')
+  })
+
+  it('renders no conflict detail for a clean claim head', () => {
+    const html = renderDetail('claim:c2')
+    expect(html).not.toContain(t('evidence.conflictDetail.title'))
+    expect(html).not.toContain(t('evidence.conflictDetail.jump'))
+  })
+
+  it('exposes the structured pairs in fold order for the selected claim', () => {
+    const pairs = conflictPairsOfClaim(CONFLICTS, 'claim:c1')
+    expect(pairs).toHaveLength(1)
+    expect(pairs[0]?.ends[0]).toMatchObject({ rel: 'supports', src: 'lit:arxiv:2401.00001', ts: '2026-09-01T00:00:00.000Z' })
+    expect(pairs[0]?.ends[1]).toMatchObject({ rel: 'contradicts', src: 'exp:run:0042' })
+    expect(conflictPairsOfClaim(CONFLICTS, 'claim:c2')).toEqual([])
   })
 })

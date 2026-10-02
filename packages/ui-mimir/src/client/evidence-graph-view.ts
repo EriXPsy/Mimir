@@ -144,3 +144,50 @@ export function conflictLinesByClaim(
   }
   return byClaim
 }
+
+/** One end of a conflict pair as the detail panel renders it. */
+export interface ConflictEndView {
+  readonly rel: string
+  readonly src: string
+  readonly note: string | null
+  readonly ts: string
+}
+
+/** One conflict pair as the detail panel renders it. */
+export interface ConflictPairView {
+  readonly ends: readonly [ConflictEndView, ConflictEndView]
+}
+
+/**
+ * The structured conflict pairs of one claim for the head detail panel —
+ * both ends with rel/src/note/ts, in the fold's stable conflict order.
+ * @param conflicts - the fold's active conflicts (supports × contradicts).
+ * @param claimKey - the selected claim head's key.
+ * @returns the claim's pairs, in fold order; empty when the claim is clean.
+ */
+export function conflictPairsOfClaim(
+  conflicts: readonly EvidenceConflict[],
+  claimKey: string,
+): readonly ConflictPairView[] {
+  const pairs: ConflictPairView[] = []
+  for (const conflict of conflicts) {
+    if (conflict.nodeKey !== claimKey) continue
+    pairs.push(Object.freeze({
+      ends: Object.freeze([
+        Object.freeze({
+          rel: conflict.supporting.rel,
+          src: conflict.supporting.src,
+          note: conflict.supporting.note,
+          ts: conflict.supporting.ts,
+        }),
+        Object.freeze({
+          rel: conflict.contradicting.rel,
+          src: conflict.contradicting.src,
+          note: conflict.contradicting.note,
+          ts: conflict.contradicting.ts,
+        }),
+      ] as const),
+    }))
+  }
+  return pairs
+}

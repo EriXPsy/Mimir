@@ -10,7 +10,7 @@
  * @module dsh-client-ui-mimir/client/EvidenceGraphView
  */
 
-import { useMemo, useState } from 'react'
+import { useMemo, useRef, useState } from 'react'
 import type {
   EvidenceClaimHistory,
   EvidenceGraphEdge,
@@ -22,9 +22,12 @@ import type { ResearchEvidenceGraphSlice, ResearchEurekaSlice } from './controll
 import type { ResearchT } from './view-common.ts'
 import {
   conflictLinesByClaim,
+  conflictPairsOfClaim,
   evidenceRelKey,
   isStruckThrough,
   retractConfirmOf,
+  type ConflictEndView,
+  type ConflictPairView,
   type EvidenceRetractConfirm,
 } from './evidence-graph-view.ts'
 import { deriveEvidenceGraphLayout, type EvidenceNodeLayout } from './evidence-graph-layout.ts'
@@ -153,11 +156,67 @@ function EdgeRow({ edge, onConfirm, onJump, t }: {
   )
 }
 
-/** The selection detail panel (progressive disclosure, PRD §53). */
-function DetailPanel({ node, edge, onJump, onConfirm, onClose, t }: {
+/** One end row of a conflict pair in the head detail panel. */
+function ConflictEndRow({ end, t }: {
+  readonly end: ConflictEndView
+  readonly t: ResearchT
+}) {
+  return (
+    <div className={panelCss.ledgerLine}>
+      <span className={panelCss.tagPill} data-active={end.rel === 'supports' || undefined}>{t(evidenceRelKey(end.rel))}</span>
+      <code className={panelCss.ledgerAction}>{end.src}</code>
+      {end.note !== null && <span>{end.note}</span>}
+    </div>
+  )
+}
+
+/** The conflict detail block of a selected claim head (PRD §53 progressive
+ *  disclosure): the active-scope counts, every pair's two ends, and the jump
+ *  into the audit layer's conflict list. */
+function ConflictDetail({ claimKey, counts, pairs, onJumpToAudit, t }: {
+  readonly claimKey: string
+  readonly counts: { readonly supports: number; readonly contradicts: number }
+  readonly pairs: readonly ConflictPairView[]
+  readonly onJumpToAudit: () => void
+  readonly t: ResearchT
+}) {
+  if (pairs.length === 0) return null
+  return (
+    <div className={panelCss.reportCard}>
+      <div className={panelCss.reportCardHead}>
+        <h4 className={panelCss.reportCardTitle}>{t('evidence.conflictDetail.title')}</h4>
+        <div className={panelCss.ledgerLine}>
+          <span className={panelCss.actorBadge}>{t('evidence.claim.counts', counts)}</span>
+          <span className={panelCss.ledgerMark}>{t('evidence.conflict')}</span>
+        </div>
+      </div>
+      <ul className={panelCss.ledgerList}>
+        {pairs.map((pair, index) => (
+          <li key={`${claimKey}:${index}`} className={panelCss.ledgerRow}>
+            <div className={panelCss.ledgerBody}>
+              <ConflictEndRow end={pair.ends[0]} t={t} />
+              <ConflictEndRow end={pair.ends[1]} t={t} />
+            </div>
+          </li>
+        ))}
+      </ul>
+      <div className={panelCss.viewActions}>
+        <button type="button" className={panelCss.retry} onClick={onJumpToAudit}>{t('evidence.conflictDetail.jump')}</button>
+      </div>
+    </div>
+  )
+}
+
+/** The selection detail panel (progressive disclosure, PRD §53). Exported
+ *  for render tests — selection is view-internal and unreachable from
+ *  server rendering, so the panel is exercised with a laid-out node. */
+export function DetailPanel({ node, edge, claim, pairs, onJump, onJumpToAudit, onConfirm, onClose, t }: {
   readonly node: EvidenceNodeLayout
   readonly edge: EvidenceGraphEdge | null
+  readonly claim: EvidenceClaimHistory | null
+  readonly pairs: readonly ConflictPairView[]
   readonly onJump: (ts: string) => void
+  readonly onJumpToAudit: () => void
   readonly onConfirm: (confirm: EvidenceRetractConfirm) => void
   readonly onClose: () => void
   readonly t: ResearchT
@@ -178,6 +237,15 @@ function DetailPanel({ node, edge, onJump, onConfirm, onClose, t }: {
       </div>
       {edge !== null && (
         <p className={panelCss.ledgerDetail}><code className={panelCss.ledgerAction}>{edge.src} → {edge.dst}</code></p>
+      )}
+      {claim !== null && node.conflict && (
+        <ConflictDetail
+          claimKey={claim.claimKey}
+          counts={{ supports: claim.supportsCount, contradicts: claim.contradictsCount }}
+          pairs={pairs}
+          onJumpToAudit={onJumpToAudit}
+          t={t}
+        />
       )}
       {edge?.retracted && (
         <p className={panelCss.ledgerDetail}>{t('evidence.retractedAt', { at: edge.retractedAt ?? '', reason: edge.retractReason ?? '' })}</p>
@@ -210,6 +278,7 @@ export function EvidenceGraphView({
   const [reason, setReason] = useState('')
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const view = evidence.view
+  const auditRef = useRef<HTMLDetailsElement | null>(null)
 
   const layout = useMemo(
     () => (view === null
@@ -225,6 +294,19 @@ export function EvidenceGraphView({
   const selectedEdge = selectedNode === null || selectedNode.eventId === null || view === null
     ? null
     : view.graph.edges.find(edge => edge.sourceEventId === selectedNode.eventId) ?? null
+  // The selected claim head's fold history (counts/status) and its active
+  // conflict pairs — both straight from the fold product, fold order.
+  const selectedClaim = selectedNode === null || selectedNode.claimKey === null || view === null
+    ? null
+    : view.graph.timeline.flatMap(group => group.claims).find(claim => claim.claimKey === selectedNode.claimKey) ?? null
+  const selectedPairs = selectedClaim !== null && selectedNode !== null && selectedNode.conflict
+    ? conflictPairsOfClaim(view?.graph.conflicts ?? [], selectedClaim.claimKey)
+    : []
+
+  const onJumpToAudit = (): void => {
+    const node = auditRef.current
+    if (node !== null) node.scrollIntoView({ block: 'start' })
+  }
 
   const onConfirmRetract = async (): Promise<void> => {
     if (confirming === null) return
@@ -297,7 +379,10 @@ export function EvidenceGraphView({
             <DetailPanel
               node={selectedNode}
               edge={selectedEdge}
+              claim={selectedClaim}
+              pairs={selectedPairs}
               onJump={jumpToProvenance}
+              onJumpToAudit={onJumpToAudit}
               onConfirm={confirm => { setConfirming(confirm); setSelectedId(null) }}
               onClose={() => { setSelectedId(null) }}
               t={t}
@@ -305,7 +390,7 @@ export function EvidenceGraphView({
           )}
 
           {/* Evidence audit: conflicts + the full claim/edge history. */}
-          <details className={css.graphAudit}>
+          <details className={css.graphAudit} ref={auditRef}>
             <summary className={panelCss.reportCardTitle}>{t('evidence.graph.auditTitle')}</summary>
 
             {view.graph.conflicts.length > 0 && (
